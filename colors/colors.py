@@ -18,7 +18,7 @@ class Colors(commands.Cog):
         Convert a known color name to RGB and hex representations.
         """
 
-        hex_code = ALL_COLORS.get(name)
+        hex_code = ALL_COLORS.get(name)[1:]
         if hex_code is None:
             return await ctx.send(f'Color "{escape_mentions(name)}" is not a known color name.')
         r, g, b = tuple(int(hex_code[i:i + 2], 16) for i in (0, 2, 4))
@@ -40,7 +40,7 @@ class Colors(commands.Cog):
         if len(hex_code) == 3:
             hex_code = ''.join(s for s in hex_code for _ in range(2))
 
-        possibilities = {v: k for k, v in ALL_COLORS.itmes() if v[::2] == hex_code[::2]}
+        possibilities = {v: k for k, v in ALL_COLORS.items() if v[1::2] == hex_code[::2]}
 
         closest_hex = difflib.get_close_matches(hex_code, possibilities, n=1)
         if closest_hex is None:
@@ -66,7 +66,7 @@ class Colors(commands.Cog):
 
         hex_code = '{0:02x}{1:02x}{2:02x}'.format(r, g, b)
 
-        possibilities = {v: k for k, v in ALL_COLORS.itmes() if v[::2] == hex_code[::2]}
+        possibilities = {v: k for k, v in ALL_COLORS.items() if v[1::2] == hex_code[::2]}
 
         closest_hex = difflib.get_close_matches(hex_code, possibilities, n=1)
         if closest_hex is None:

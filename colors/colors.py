@@ -15,7 +15,7 @@ class Colors(commands.Cog):
     Conversions between hex, RGB, and color names.
     """
 
-    @commands.group(invoke_without_command=True)
+    @commands.group(invoke_without_command=True, aliases=['colour'])
     @checks.has_permissions(PermissionLevel.REGULAR)
     async def color(self, ctx, *, name: str.lower):
         """

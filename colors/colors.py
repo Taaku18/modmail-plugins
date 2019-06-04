@@ -11,6 +11,10 @@ from core.models import PermissionLevel
 
 
 class Colors(commands.Cog):
+    """
+    Conversions between hex, RGB, and color names.
+    """
+
     @commands.group(invoke_without_command=True)
     @checks.has_permissions(PermissionLevel.REGULAR)
     async def color(self, ctx, *, name: str.lower):
@@ -25,7 +29,7 @@ class Colors(commands.Cog):
         hex_code = hex_code[1:]
         r, g, b = tuple(int(hex_code[i:i + 2], 16) for i in (0, 2, 4))
 
-        embed = Embed(title=name, description=f'Hex: `#{hex_code}`, RGB: `{r}, {g}, {b}`.')
+        embed = Embed(title=name.title(), description=f'Hex: `#{hex_code}`, RGB: `{r}, {g}, {b}`.')
         embed.set_thumbnail(url=f'https://placehold.it/100/{hex_code}?text=+')
         return await ctx.send(embed=embed)
 
@@ -50,7 +54,7 @@ class Colors(commands.Cog):
         closest_hex = closest_hex[0]
 
         clean_name = re.match(r'^(?:[^:]+:)?([^:]+)$', possibilities[closest_hex]).group(1)
-        embed = Embed(title=f'#{hex_code}', description=f'Closest color name: "{clean_name}".')
+        embed = Embed(title=f'#{hex_code}', description=f'Closest color name: "{clean_name.title()}".')
         embed.set_thumbnail(url=f'https://placehold.it/100/{closest_hex[1:]}?text=+')
         return await ctx.send(embed=embed)
 
@@ -78,7 +82,7 @@ class Colors(commands.Cog):
         closest_hex = closest_hex[0]
 
         clean_name = re.match(r'^(?:[^:]+:)?([^:]+)$', possibilities[closest_hex]).group(1)
-        embed = Embed(title=f'RGB {r}, {g}, {b}', description=f'Closest color name: "{clean_name}".')
+        embed = Embed(title=f'RGB {r}, {g}, {b}', description=f'Closest color name: "{clean_name.title()}".')
         embed.set_thumbnail(url=f'https://placehold.it/100/{closest_hex[1:]}?text=+')
         return await ctx.send(embed=embed)
 

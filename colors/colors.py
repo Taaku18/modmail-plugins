@@ -11,16 +11,18 @@ from core.models import PermissionLevel
 
 
 class Colors(commands.Cog):
-    @commands.group()
+    @commands.group(invoke_without_command=True)
     @checks.has_permissions(PermissionLevel.REGULAR)
     async def color(self, ctx, *, name: str.lower):
         """
         Convert a known color name to RGB and hex representations.
         """
 
-        hex_code = ALL_COLORS.get(name)[1:]
+        hex_code = ALL_COLORS.get(name)
         if hex_code is None:
             return await ctx.send(f'Color "{escape_mentions(name)}" is not a known color name.')
+
+        hex_code = hex_code[1:]
         r, g, b = tuple(int(hex_code[i:i + 2], 16) for i in (0, 2, 4))
 
         embed = Embed(title=name, description=f'Hex: `#{hex_code}`, RGB: `{r}, {g}, {b}`.')

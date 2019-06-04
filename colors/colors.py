@@ -35,7 +35,7 @@ class Colors(commands.Cog):
         """
         Find the closest color name corresponding to the hex code, if any.
         """
-        hex_code_match = re.match(r'^#?([a-f0-9]{6}[a-f0-9]{3})$', hex_code)
+        hex_code_match = re.match(r'^#?([a-f0-9]{6}|[a-f0-9]{3})$', hex_code)
         if hex_code_match is None:
             return await ctx.send(f'"{escape_mentions(hex_code)}" is not a valid hex code.')
         hex_code = hex_code_match.group(1)
@@ -104,7 +104,7 @@ class Colors(commands.Cog):
         """
         Converts a hex code to RGB value.
         """
-        hex_code_match = re.match(r'^#?([a-f0-9]{6}[a-f0-9]{3})$', hex_code)
+        hex_code_match = re.match(r'^#?([a-f0-9]{6}|[a-f0-9]{3})$', hex_code)
         if hex_code_match is None:
             return await ctx.send(f'"{escape_mentions(hex_code)}" is not a valid hex code.')
         hex_code = hex_code_match.group(1)

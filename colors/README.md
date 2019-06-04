@@ -1,10 +1,12 @@
-Simple plugins to do with colors.
+# Colors
 
-# Installation
+Simple plugin to work with colors.
+
+## Installation
 
 To add this plugin, use this command in your Modmail server: `?plugin add colors`.
 
-# Usage
+## Usage
 
 The commands usage list assumes you retain the default prefix, `?`.
 

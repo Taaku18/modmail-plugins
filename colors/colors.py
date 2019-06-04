@@ -48,8 +48,10 @@ class Colors(commands.Cog):
         if not closest_hex:
             return await ctx.send(f'Hex code `#{hex_code}` does not have an known color name.')
         closest_hex = closest_hex[0]
-        embed = Embed(title=f'#{hex_code}', description=f'Closest color name: "{possibilities[closest_hex]}".')
-        embed.set_thumbnail(url=f'https://placehold.it/100/{closest_hex}?text=+')
+
+        clean_name = re.match(r'^(?:[^:]+:)?([^:]+)$', possibilities[closest_hex])
+        embed = Embed(title=f'#{hex_code}', description=f'Closest color name: "{clean_name}".')
+        embed.set_thumbnail(url=f'https://placehold.it/100/{closest_hex[1:]}?text=+')
         return await ctx.send(embed=embed)
 
     @color.command()
@@ -75,8 +77,9 @@ class Colors(commands.Cog):
             return await ctx.send(f'RGB values `{r}, {g}, {b}` does not have an known color name.')
         closest_hex = closest_hex[0]
 
-        embed = Embed(title=f'RGB {r}, {g}, {b}', description=f'Closest color name: "{possibilities[closest_hex]}".')
-        embed.set_thumbnail(url=f'https://placehold.it/100/{closest_hex}?text=+')
+        clean_name = re.match(r'^(?:[^:]+:)?([^:]+)$', possibilities[closest_hex])
+        embed = Embed(title=f'RGB {r}, {g}, {b}', description=f'Closest color name: "{clean_name}".')
+        embed.set_thumbnail(url=f'https://placehold.it/100/{closest_hex[1:]}?text=+')
         return await ctx.send(embed=embed)
 
     @commands.command()

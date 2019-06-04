@@ -23,7 +23,7 @@ class Colors(commands.Cog):
             return await ctx.send(f'Color "{escape_mentions(name)}" is not a known color name.')
         r, g, b = tuple(int(hex_code[i:i + 2], 16) for i in (0, 2, 4))
 
-        embed = Embed(title=name, description=f'Hex: #{hex_code}, RGB: {r}, {g}, {b}.')
+        embed = Embed(title=name, description=f'Hex: `#{hex_code}`, RGB: `{r}, {g}, {b}`.')
         embed.set_thumbnail(url=f'https://placehold.it/100/{hex_code}?text=+')
         return await ctx.send(embed=embed)
 
@@ -44,7 +44,7 @@ class Colors(commands.Cog):
 
         closest_hex = difflib.get_close_matches(hex_code, possibilities, n=1)
         if closest_hex is None:
-            return await ctx.send(f'Hex code "{hex_code}" does not have an known color name.')
+            return await ctx.send(f'Hex code `#{hex_code}` does not have an known color name.')
 
         embed = Embed(title=f'#{hex_code}', description=f'Closest color name: "{possibilities[closest_hex]}".')
         embed.set_thumbnail(url=f'https://placehold.it/100/{closest_hex}?text=+')
@@ -62,7 +62,7 @@ class Colors(commands.Cog):
 
         r, g, b = map(int, rgb_value_match.groups())
         if not 0 <= r <= 255 or not 0 <= g <= 255 or not 0 <= b <= 255:
-            return await ctx.send(f'"{rgb_value}" is not a valid RGB value.')
+            return await ctx.send(f'`{rgb_value}` is not a valid RGB value.')
 
         hex_code = '{0:02x}{1:02x}{2:02x}'.format(r, g, b)
 
@@ -70,7 +70,7 @@ class Colors(commands.Cog):
 
         closest_hex = difflib.get_close_matches(hex_code, possibilities, n=1)
         if closest_hex is None:
-            return await ctx.send(f'RGB values {r}, {g}, {b} does not have an known color name.')
+            return await ctx.send(f'RGB values `{r}, {g}, {b}` does not have an known color name.')
 
         embed = Embed(title=f'RGB {r}, {g}, {b}', description=f'Closest color name: "{possibilities[closest_hex]}".')
         embed.set_thumbnail(url=f'https://placehold.it/100/{closest_hex}?text=+')
@@ -88,11 +88,11 @@ class Colors(commands.Cog):
 
         r, g, b = map(int, rgb_value_match.groups())
         if not 0 <= r <= 255 or not 0 <= g <= 255 or not 0 <= b <= 255:
-            return await ctx.send(f'"{rgb_value}" is not a valid RGB value.')
+            return await ctx.send(f'`{rgb_value}` is not a valid RGB value.')
 
         hex_code = '{0:02x}{1:02x}{2:02x}'.format(r, g, b)
 
-        embed = Embed(title=f'RGB {r}, {g}, {b}', description=f'Corresponding hex code is #{hex_code}.')
+        embed = Embed(title=f'RGB {r}, {g}, {b}', description=f'Corresponding hex code is `#{hex_code}`.')
         embed.set_thumbnail(url=f'https://placehold.it/100/{hex_code}?text=+')
         return await ctx.send(embed=embed)
 
@@ -111,7 +111,7 @@ class Colors(commands.Cog):
 
         r, g, b = tuple(int(hex_code[i:i + 2], 16) for i in (0, 2, 4))
 
-        embed = Embed(title=f'#{hex_code}', description=f'Corresponding RGB value is {r}, {g}, {b}.')
+        embed = Embed(title=f'#{hex_code}', description=f'Corresponding RGB value is `{r}, {g}, {b}`.')
         embed.set_thumbnail(url=f'https://placehold.it/100/{hex_code}?text=+')
         return await ctx.send(embed=embed)
 

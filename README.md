@@ -1,1 +1,3 @@
-# modmail-plugins
+# Modmail Plugins
+
+Collection of useless plugins.

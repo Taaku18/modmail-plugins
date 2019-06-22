@@ -34,9 +34,9 @@ class Calculator(commands.Cog):
             var = re.match(r'^let ([a-zA-Z]+)\s*=\s*(.+)$', line)
             if var is not None:
                 v, e = var.groups()
-                variables[v] = parse_expr(e, transformations=self.transformations).subs(variables).doit()
+                variables[v] = parse_expr(e, transformations=self.transformations).subs(variables).evalf().doit()
             else:
-                output += str(parse_expr(line, transformations=self.transformations).subs(variables).doit()) + '\n'
+                output += str(parse_expr(line, transformations=self.transformations).subs(variables).evalf().doit()) + '\n'
         await ctx.send(f'```\n{output}\n```')
 
 

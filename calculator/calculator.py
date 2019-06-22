@@ -11,6 +11,10 @@ from core.utils import cleanup_code
 
 
 class Calculator(commands.Cog):
+    """
+    It's not working btw!!
+    """
+
     def __init__(self, bot):
         self.bot = bot
         self.transformations = standard_transformations + (implicit_multiplication, implicit_application,
@@ -19,6 +23,9 @@ class Calculator(commands.Cog):
     @commands.command()
     @checks.has_permissions(PermissionLevel.OWNER)
     async def calc(self, ctx, *, exp):
+        """
+        Basically a simple calculator. This command is prone to hacking by the most experienced, unsafe for public use.
+        """
         exp = cleanup_code(exp).splitlines()
         variables = {}
         output = ''

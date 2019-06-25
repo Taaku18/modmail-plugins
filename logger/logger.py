@@ -333,6 +333,9 @@ class Logger(commands.Cog):
         embed.timestamp = time
         if fields is not None:
             for n, v, i in fields:
+                n = str(n)
+                v = str(v)
+
                 if not n or not v:
                     logger.info('Invalid form name/body: %s, %s', n, v)
                     continue

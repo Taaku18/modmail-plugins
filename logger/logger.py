@@ -172,7 +172,7 @@ class Logger(commands.Cog):
         message = payload.cached_message
 
         if message:
-            time = message.created_at.strftime('%b %-d, %Y at %-I:%M %p UTC')
+            time = message.created_at.strftime('%b %-d at %-I:%M %p UTC')
             md_time = message.created_at.strftime('%H%M_%d_%B_%Y_in_UTC')
 
             return await channel.send(embed=self.make_embed(

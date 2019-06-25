@@ -130,18 +130,19 @@ class Logger(commands.Cog):
 
     @commands.Cog.listener()
     async def on_raw_message_edit(self, payload):
-        if payload.guild_id != self.bot.guild.id:
-            return
-        channel = await self.get_log_channel()
-
         channel_id = payload.data['channel_id']
         message_id = payload.data['id']
 
         payload_channel = self.bot.guild.get_channel(channel_id)
+
         if payload_channel is not None:
+            if payload_channel.guild.id != self.bot.guild.id:
+                return
             channel_text = payload_channel.mention
         else:
             channel_text = '#deleted-channel'
+
+        channel = await self.get_log_channel()
 
         message = payload.cached_message
         new_content = payload.data.get('content')

@@ -41,9 +41,10 @@ class Logger(commands.Cog):
         )
 
     async def get_log_channel(self):
-        channel_id = await self.db.find_one({'_id': 'logger-config'})
-        if channel_id is None:
+        config = await self.db.find_one({'_id': 'logger-config'})
+        if config is None:
             raise ValueError(f'No logger channel specified, set one with `{self.bot.prefix}lchannel #channel`.')
+        channel_id = config['channel_id']
         channel = self.bot.guild.get_channel(channel_id)
         if channel is None:
             self.db.find_one_and_delete({'_id': 'logger-config'})
@@ -92,7 +93,7 @@ class Logger(commands.Cog):
 
     @commands.Cog.listener()
     async def on_raw_bulk_message_delete(self, payload):
-        if payload.guild_id != self.bot.guild.id:
+        if payload.guild_id != self.bot.guild_id:
             return
         channel = await self.get_log_channel()
 
@@ -136,7 +137,7 @@ class Logger(commands.Cog):
         payload_channel = self.bot.guild.get_channel(channel_id)
 
         if payload_channel is not None:
-            if payload_channel.guild.id != self.bot.guild.id:
+            if payload_channel.guild.id != self.bot.guild_id:
                 return
             channel_text = payload_channel.mention
         else:

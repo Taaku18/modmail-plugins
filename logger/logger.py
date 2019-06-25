@@ -264,7 +264,7 @@ class Logger(commands.Cog):
 
         channel = await self.get_log_channel()
         old_message = payload.cached_message
-
+        print(payload.data)
         if old_message:
             time = old_message.created_at.strftime('%b %-d, %Y at %-I:%M %p UTC')
             md_time = old_message.created_at.strftime('%H%M_%d_%B_%Y_in_UTC')

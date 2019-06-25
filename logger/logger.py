@@ -178,6 +178,7 @@ class Logger(commands.Cog):
                         ('After', new_content, False),
                         ('Message ID:', f'[{message_id}]({old_message.jump_url})', True),
                         ('Channel ID:', channel_id, True),
+                        ('Sent by:', old_message.author.mention),
                         ('Message sent on:', old_message.created_at.strftime('%b %-d, %Y at %-I:%M %p'), True)
                         ]
             ))
@@ -191,6 +192,7 @@ class Logger(commands.Cog):
                     fields=[('Now', new_content, False),
                             ('Message ID:', f'[{message_id}]({message.jump_url})', True),
                             ('Channel ID:', channel_id, True),
+                            ('Sent by:', message.author.mention),
                             ('Message sent on:', message.created_at.strftime('%b %-d, %Y at %-I:%M %p'), True),
                             ]
                 ))

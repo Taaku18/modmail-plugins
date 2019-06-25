@@ -26,7 +26,7 @@ class Logger(commands.Cog):
         self.db = bot.plugin_db.get_partition(self)
         self._channel = None
         self.bg_task = self.bot.loop.create_task(self.audit_logs_logger())
-        self.last_audit_log = datetime.datetime.utcnow()
+        self.last_audit_log = datetime.datetime.utcnow(), -1
 
     @commands.command()
     @checks.has_permissions(PermissionLevel.OWNER)
@@ -64,8 +64,14 @@ class Logger(commands.Cog):
         logger.info('Starting audit log listener loop.')
         while not self.bot.is_closed():
             channel = await self.get_log_channel()
-            async for audit in self.bot.guild.audit_logs(after=self.last_audit_log):
-                self.last_audit_log = audit
+            audits = []
+            async for audit in self.bot.guild.audit_logs(limit=30):
+                if audit.created_at < self.last_audit_log[0] or audit.id == self.last_audit_log[1]:
+                    break
+                audits.insert(0, audit)
+
+            for audit in audits:
+                self.last_audit_log = audit.created_at, audit.id
 
                 if audit.action == AuditLogAction.channel_create:
                     name = getattr(audit.target, 'name', getattr(audit.after, 'name', 'unknown-channel'))
@@ -142,7 +148,12 @@ class Logger(commands.Cog):
                         time=audit.created_at,
                         fields=[('Channel ID:', audit.target.id, True)]
                     ))
-
+            if len(audits) == 30:
+                await channel.send(embed=self.make_embed(
+                    'Warning',
+                    'Due to the nature of Discord API, there may be more audits undisplayed. '
+                    'Check the audits page for a complete list of audits.'
+                ))
             await sleep(5)
 
     @commands.Cog.listener()

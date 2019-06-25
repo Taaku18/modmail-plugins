@@ -124,10 +124,10 @@ class Logger(commands.Cog):
                     'https://hasteb.in/documents', data=upload_text
             ) as resp:
                 key = (await resp.json())["key"]
-                await channel.send(self.make_embed(f'Multiple messages deleted from {channel_text}.', f'Deleted messages: https://hasteb.in/{key}.',
+                await channel.send(embed=self.make_embed(f'Multiple messages deleted from {channel_text}.', f'Deleted messages: https://hasteb.in/{key}.',
                                                    fields=[('Channel ID:', payload.channel_id, True)]))
         except (JSONDecodeError, ClientResponseError, IndexError):
-            await channel.send(self.make_embed(f'Multiple messages deleted from {channel_text}.', 'Failed to upload to Hastebin. Deleted message IDs: ' + ', '.join(map(str, message_ids)) + '.', fields=[('Channel ID', payload.channel_id, True)]))
+            await channel.send(embed=self.make_embed(f'Multiple messages deleted from {channel_text}.', 'Failed to upload to Hastebin. Deleted message IDs: ' + ', '.join(map(str, message_ids)) + '.', fields=[('Channel ID', payload.channel_id, True)]))
 
     @commands.Cog.listener()
     async def on_raw_message_edit(self, payload):
@@ -150,7 +150,7 @@ class Logger(commands.Cog):
 
         if message:
             old_content = message.content
-            await channel.send(self.make_embed(f'A message was updated in {channel_text}.',
+            await channel.send(embed=self.make_embed(f'A message was updated in {channel_text}.',
                                                fields=[('Before', old_content, False),
                                                        ('After', new_content or 'No content change (possibly due to an embed edit).', False), ('Message ID:', message_id, True),
                                                        ('Channel ID:', channel_id, True), ('Message sent on:', message.created_at.strftime('%b %-d at %-I:%S %p %Z UTC'), True)]))
@@ -159,7 +159,7 @@ class Logger(commands.Cog):
             if payload_channel is not None:
                 try:
                     message = await payload_channel.fetch_message(message_id)
-                    await channel.send(self.make_embed(f'A message was updated in {channel_text}.',
+                    await channel.send(embed=self.make_embed(f'A message was updated in {channel_text}.',
                                                    'The former message content cannot be found.',
                                                    fields=[('Now',
                                                             new_content or 'No content change (possibly due to an embed edit).',
@@ -170,7 +170,7 @@ class Logger(commands.Cog):
                                                                                                True)]))
                 except NotFound:
                     pass
-            await channel.send(self.make_embed(f'A message was updated in {channel_text}.',
+            await channel.send(embed=self.make_embed(f'A message was updated in {channel_text}.',
                                                'The former message content cannot be found.',
                                             fields=[('Now',
                                                     new_content or 'No content change (possibly due to an embed edit).',

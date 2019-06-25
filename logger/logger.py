@@ -264,7 +264,7 @@ class Logger(commands.Cog):
 
         channel = await self.get_log_channel()
         old_message = payload.cached_message
-        logger.info(payload.data)
+        logger.warning(payload.data)
         if old_message:
             time = old_message.created_at.strftime('%b %-d, %Y at %-I:%M %p UTC')
             md_time = old_message.created_at.strftime('%H%M_%d_%B_%Y_in_UTC')
@@ -335,6 +335,9 @@ class Logger(commands.Cog):
             for n, v, i in fields:
                 if not n or not v:
                     logger.info('Invalid form name/body: %s, %s', n, v)
+                    continue
+                if len(n) > 256 or len(v) > 1024:
+                    logger.info('Name/body too long: %s, %s', n, v)
                     continue
                 embed.add_field(name=n, value=v, inline=i)
         return embed

@@ -7,7 +7,6 @@ from aiohttp import ClientResponseError
 from discord import Embed, TextChannel, NotFound
 from discord.ext import commands
 from discord.enums import AuditLogAction
-from discord.utils import escape_mentions
 
 from core import checks
 from core.models import PermissionLevel
@@ -85,7 +84,7 @@ class Logger(commands.Cog):
             return await channel.send(embed=self.make_embed(
                 f'A message sent by {message.author.name}#{message.author.discriminator} '
                 f'({message.author.id}) has been deleted from #{message.channel.name}.',
-                escape_mentions(message.content),
+                message.content,
                 fields=[('Message ID:', payload.message_id, True),
                         ('Channel ID:', payload.channel_id, True),
                         ('Message sent on:', message.created_at.strftime('%b %-d at %-I:%M %p'), True)
@@ -170,42 +169,41 @@ class Logger(commands.Cog):
             channel_text = 'deleted-channel'
 
         channel = await self.get_log_channel()
-        message = payload.cached_message
+        old_message = payload.cached_message
 
-        if message:
+        if old_message:
             return await channel.send(embed=self.make_embed(
                 f'A message was updated in #{channel_text}.',
-                fields=[('Before', message.content, False),
+                fields=[('Before', old_message.content, False),
                         ('After', new_content, False),
-                        ('Message ID:', message_id, True),
+                        ('Message ID:', f'[{message_id}]({old_message.jump_url})', True),
                         ('Channel ID:', channel_id, True),
-                        ('Message sent on:', message.created_at.strftime('%b %-d at %-I:%M %p'), True)
+                        ('Message sent on:', old_message.created_at.strftime('%b %-d at %-I:%M %p'), True)
                         ]
             ))
 
-        else:
-            if payload_channel is not None:
-                try:
-                    message = await payload_channel.fetch_message(message_id)
-                    return await channel.send(embed=self.make_embed(
-                        f'A message was updated in #{channel_text}.',
-                        'The former message content cannot be found.',
-                        fields=[('Now', new_content, False),
-                                ('Message ID:', message_id, True),
-                                ('Channel ID:', channel_id, True),
-                                ('Message sent on:', message.created_at.strftime('%b %-d at %-I:%M %p'), True)
-                                ]
-                    ))
-                except NotFound:
-                    pass
-            return await channel.send(embed=self.make_embed(
-                f'A message was updated in {channel_text}.',
-                'The former message content cannot be found.',
-                fields=[('Now', new_content, False),
-                        ('Message ID:', message_id, True),
-                        ('Channel ID:', channel_id, True)
-                        ]
-            ))
+        if payload_channel is not None:
+            try:
+                message = await payload_channel.fetch_message(message_id)
+                return await channel.send(embed=self.make_embed(
+                    f'A message was updated in #{channel_text}.',
+                    'The former message content cannot be found.',
+                    fields=[('Now', new_content, False),
+                            ('Message ID:', f'[{message_id}]({message.jump_url})', True),
+                            ('Channel ID:', channel_id, True),
+                            ('Message sent on:', message.created_at.strftime('%b %-d at %-I:%M %p'), True),
+                            ]
+                ))
+            except NotFound:
+                pass
+        return await channel.send(embed=self.make_embed(
+            f'A message was updated in {channel_text}.',
+            'The former message content cannot be found.',
+            fields=[('Now', new_content, False),
+                    ('Message ID:', message_id, True),
+                    ('Channel ID:', channel_id, True)
+                    ]
+        ))
 
     @commands.Cog.listener()
     async def on_member_join(self, member):

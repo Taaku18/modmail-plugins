@@ -144,7 +144,8 @@ class Logger(commands.Cog):
                     channel_text = getattr(audit.extra.channel, 'name', 'unknown-channel')
                     await channel.send(embed=self.make_embed(
                         f'Message{pl} Deleted',
-                        f'{audit.user.mention} deleted {audit.extra.count} message{pl} from #{channel_text}.',
+                        f'{audit.user.mention} deleted {audit.extra.count} message{pl} sent by {audit.target.mention} '
+                        f'from #{channel_text}.',
                         time=audit.created_at,
                         fields=[('Channel ID:', audit.target.id, True)]
                     ))
@@ -170,7 +171,7 @@ class Logger(commands.Cog):
                 message.content,
                 fields=[('Message ID:', payload.message_id, True),
                         ('Channel ID:', payload.channel_id, True),
-                        ('Message sent on:', message.created_at.strftime('%b %-d at %-I:%M %p'), True)
+                        ('Message sent on:', message.created_at.strftime('%b %-d at %-I:%M %p UTC'), True)
                         ]
             ))
 
@@ -257,12 +258,12 @@ class Logger(commands.Cog):
         if old_message:
             return await channel.send(embed=self.make_embed(
                 f'A message was updated in #{channel_text}.',
-                fields=[('Before', old_message.content, False),
-                        ('After', new_content, False),
+                fields=[('Before', old_message.content or 'No Content', False),
+                        ('After', new_content or 'No Content', False),
                         ('Message ID:', f'[{message_id}]({old_message.jump_url})', True),
                         ('Channel ID:', channel_id, True),
                         ('Sent by:', old_message.author.mention, True),
-                        ('Message sent on:', old_message.created_at.strftime('%b %-d, %Y at %-I:%M %p'), True)
+                        ('Message sent on:', old_message.created_at.strftime('%b %-d, %Y at %-I:%M %p UTC'), True)
                         ]
             ))
 
@@ -272,11 +273,11 @@ class Logger(commands.Cog):
                 return await channel.send(embed=self.make_embed(
                     f'A message was updated in #{channel_text}.',
                     'The former message content cannot be found.',
-                    fields=[('Now', new_content, False),
+                    fields=[('Now', new_content or 'No Content', False),
                             ('Message ID:', f'[{message_id}]({message.jump_url})', True),
                             ('Channel ID:', channel_id, True),
                             ('Sent by:', message.author.mention, True),
-                            ('Message sent on:', message.created_at.strftime('%b %-d, %Y at %-I:%M %p'), True),
+                            ('Message sent on:', message.created_at.strftime('%b %-d, %Y at %-I:%M %p UTC'), True),
                             ]
                 ))
             except NotFound:
@@ -284,7 +285,7 @@ class Logger(commands.Cog):
         return await channel.send(embed=self.make_embed(
             f'A message was updated in {channel_text}.',
             'The former message content cannot be found.',
-            fields=[('Now', new_content, False),
+            fields=[('Now', new_content or 'No Content', False),
                     ('Message ID:', message_id, True),
                     ('Channel ID:', channel_id, True)
                     ]
@@ -313,9 +314,12 @@ class Logger(commands.Cog):
     def make_embed(self, title, description='', *, time=None, fields=None):
         embed = Embed(title=title, description=description, color=self.bot.main_color)
         time = time if time is not None else datetime.datetime.utcnow()
-        embed.set_footer(text=time.strftime('%b %-d, %Y at %-I:%M %p'))
+        embed.timestamp = time
         if fields is not None:
             for n, v, i in fields:
+                if not n or not v:
+                    logger.info('Invalid form name/body: %s, %s', n, v)
+                    continue
                 embed.add_field(name=n, value=v, inline=i)
         return embed
 

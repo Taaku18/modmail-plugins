@@ -214,7 +214,7 @@ class Logger(commands.Cog):
         channel = await self.get_log_channel()
         await channel.send(embed=self.make_embed(
             'Member Joined',
-            f'{member.name}#{member.discriminator} ({member.id}) has joined.'
+            f'{member.mention} has joined.'
         ))
 
     @commands.Cog.listener()
@@ -224,13 +224,13 @@ class Logger(commands.Cog):
         channel = await self.get_log_channel()
         await channel.send(embed=self.make_embed(
             'Member Joined',
-            f'{member.name}#{member.discriminator} ({member.id}) has left.'
+            f'{member.mention} has left.'
         ))
 
     def make_embed(self, title, description='', *, time=None, fields=None):
         embed = Embed(title=title, description=description, color=self.bot.main_color)
         time = time if time is not None else datetime.datetime.utcnow()
-        embed.set_footer(text=time.strftime('%b %-d at %-I:%M %p UTC'))
+        embed.set_footer(text=time.strftime('%b %-d, %Y at %-I:%M %p'))
         if fields is not None:
             for n, v, i in fields:
                 embed.add_field(name=n, value=v, inline=i)

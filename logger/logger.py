@@ -32,7 +32,7 @@ class Logger(commands.Cog):
         try:
             self.bg_task.cancel()
             self.bot.loop.run_until_complete(self.bg_task)
-        except CancelledError:
+        except (CancelledError, RuntimeError):
             logger.info('Audit log listener loop cancelled.')
 
     @commands.command()

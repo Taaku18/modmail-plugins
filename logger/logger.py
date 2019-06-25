@@ -165,13 +165,16 @@ class Logger(commands.Cog):
         message = payload.cached_message
 
         if message:
+            time = message.created_at.strftime('%b %-d, %Y at %-I:%M %p UTC')
+            md_time = message.created_at.strftime('%H%M_%d_%B_%Y_in_UTC')
+
             return await channel.send(embed=self.make_embed(
                 f'A message sent by {message.author.name}#{message.author.discriminator} '
                 f'({message.author.id}) has been deleted from #{message.channel.name}.',
                 message.content,
                 fields=[('Message ID:', payload.message_id, True),
                         ('Channel ID:', payload.channel_id, True),
-                        ('Message sent on:', message.created_at.strftime('%b %-d at %-I:%M %p UTC'), True)
+                        ('Message sent on:', f'[{time}](https://time.is/{md_time}?Message_Deleted)', True)
                         ]
             ))
 
@@ -256,6 +259,9 @@ class Logger(commands.Cog):
         old_message = payload.cached_message
 
         if old_message:
+            time = old_message.created_at.strftime('%b %-d, %Y at %-I:%M %p UTC')
+            md_time = old_message.created_at.strftime('%H%M_%d_%B_%Y_in_UTC')
+
             return await channel.send(embed=self.make_embed(
                 f'A message was updated in #{channel_text}.',
                 fields=[('Before', old_message.content or 'No Content', False),
@@ -263,13 +269,16 @@ class Logger(commands.Cog):
                         ('Message ID:', f'[{message_id}]({old_message.jump_url})', True),
                         ('Channel ID:', channel_id, True),
                         ('Sent by:', old_message.author.mention, True),
-                        ('Message sent on:', old_message.created_at.strftime('%b %-d, %Y at %-I:%M %p UTC'), True)
+                        ('Message sent on:', f'[{time}](https://time.is/{md_time}?Message_Edited)', True)
                         ]
             ))
 
         if payload_channel is not None:
             try:
                 message = await payload_channel.fetch_message(message_id)
+                time = message.created_at.strftime('%b %-d, %Y at %-I:%M %p UTC')
+                md_time = message.created_at.strftime('%H%M_%d_%B_%Y_in_UTC')
+
                 return await channel.send(embed=self.make_embed(
                     f'A message was updated in #{channel_text}.',
                     'The former message content cannot be found.',
@@ -277,7 +286,7 @@ class Logger(commands.Cog):
                             ('Message ID:', f'[{message_id}]({message.jump_url})', True),
                             ('Channel ID:', channel_id, True),
                             ('Sent by:', message.author.mention, True),
-                            ('Message sent on:', message.created_at.strftime('%b %-d, %Y at %-I:%M %p UTC'), True),
+                            ('Message sent on:', f'[{time}](https://time.is/{md_time}?Message_Edited)', True),
                             ]
                 ))
             except NotFound:

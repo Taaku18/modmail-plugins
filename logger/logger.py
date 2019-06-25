@@ -1,5 +1,6 @@
 import datetime
 from asyncio import sleep
+from logging import getLogger
 from json import JSONDecodeError
 
 from aiohttp import ClientResponseError
@@ -10,6 +11,9 @@ from discord.enums import AuditLogAction
 
 from core import checks
 from core.models import PermissionLevel
+
+
+logger = getLogger('Modmail')
 
 
 class Logger(commands.Cog):
@@ -57,10 +61,11 @@ class Logger(commands.Cog):
 
     async def audit_logs_logger(self):
         await self.bot.wait_until_ready()
+        logger.info('Starting audit log listener loop.')
         while not self.bot.is_closed():
             channel = await self.get_log_channel()
             async for audit in self.bot.guild.audit_logs(after=self.last_audit_log):
-                self.last_audit_log = audit.created_at
+                self.last_audit_log = audit
 
                 if audit.action == AuditLogAction.channel_create:
                     name = getattr(audit.target, 'name', getattr(audit.after, 'name', 'unknown-channel'))
@@ -245,7 +250,7 @@ class Logger(commands.Cog):
                         ('After', new_content, False),
                         ('Message ID:', f'[{message_id}]({old_message.jump_url})', True),
                         ('Channel ID:', channel_id, True),
-                        ('Sent by:', old_message.author.mention),
+                        ('Sent by:', old_message.author.mention, True),
                         ('Message sent on:', old_message.created_at.strftime('%b %-d, %Y at %-I:%M %p'), True)
                         ]
             ))
@@ -259,7 +264,7 @@ class Logger(commands.Cog):
                     fields=[('Now', new_content, False),
                             ('Message ID:', f'[{message_id}]({message.jump_url})', True),
                             ('Channel ID:', channel_id, True),
-                            ('Sent by:', message.author.mention),
+                            ('Sent by:', message.author.mention, True),
                             ('Message sent on:', message.created_at.strftime('%b %-d, %Y at %-I:%M %p'), True),
                             ]
                 ))

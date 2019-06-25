@@ -1,5 +1,5 @@
 import datetime
-from asyncio import sleep
+from asyncio import sleep, CancelledError
 from logging import getLogger
 from json import JSONDecodeError
 
@@ -27,6 +27,13 @@ class Logger(commands.Cog):
         self._channel = None
         self.bg_task = self.bot.loop.create_task(self.audit_logs_logger())
         self.last_audit_log = datetime.datetime.utcnow(), -1
+
+    def cog_unload(self):
+        try:
+            self.bg_task.cancel()
+            self.bot.loop.run_until_complete(self.bg_task)
+        except CancelledError:
+            logger.info('Audit log listener loop cancelled.')
 
     @commands.command()
     @checks.has_permissions(PermissionLevel.OWNER)

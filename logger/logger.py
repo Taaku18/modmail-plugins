@@ -35,18 +35,18 @@ class Logger(commands.Cog):
 
     async def set_log_channel(self, channel):
         await self.db.find_one_and_update(
-            {'_id': 'channel'},
-            {'$set': channel.id},
+            {'_id': 'logger-config'},
+            {'$set': {'channel_id': channel.id}},
             upsert=True
         )
 
     async def get_log_channel(self):
-        channel_id = await self.db.find_one({'_id': 'channel'})
+        channel_id = await self.db.find_one({'_id': 'logger-config'})
         if channel_id is None:
             raise ValueError(f'No logger channel specified, set one with `{self.bot.prefix}lchannel #channel`.')
         channel = self.bot.guild.get_channel(channel_id)
         if channel is None:
-            self.db.find_one_and_delete({'_id': 'channel'})
+            self.db.find_one_and_delete({'_id': 'logger-config'})
             raise ValueError(f'Logger channel with ID `{channel_id}` not found.')
         return channel
 

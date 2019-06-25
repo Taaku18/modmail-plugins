@@ -230,7 +230,7 @@ class Logger(commands.Cog):
     def make_embed(self, title, description='', *, time=None, fields=None):
         embed = Embed(title=title, description=description, color=self.bot.main_color)
         time = time if time is not None else datetime.datetime.utcnow()
-        embed.set_footer(text=time.strftime('%b %-d at %-I:%S %p %Z UTC'))
+        embed.set_footer(text=time.strftime('%b %-d at %-I:%M %p UTC'))
         if fields is not None:
             for n, v, i in fields:
                 embed.add_field(name=n, value=v, inline=i)

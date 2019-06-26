@@ -249,8 +249,10 @@ class Logger(commands.Cog):
         channel_id = int(payload.data['channel_id'])
         message_id = int(payload.data['id'])
 
-        new_content = payload.data.get('content')
-        if new_content is None:
+        new_content = payload.data.get('content', '')
+        old_message = payload.cached_message
+
+        if not new_content or new_content == old_message.content:
             # Currently does not support Embed edits
             return
 
@@ -263,8 +265,7 @@ class Logger(commands.Cog):
             channel_text = 'deleted-channel'
 
         channel = await self.get_log_channel()
-        old_message = payload.cached_message
-        logger.warning(payload.data)
+
         if old_message:
             time = old_message.created_at.strftime('%b %-d, %Y at %-I:%M %p UTC')
             md_time = old_message.created_at.strftime('%H%M_%d_%B_%Y_in_UTC')

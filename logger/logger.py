@@ -29,11 +29,7 @@ class Logger(commands.Cog):
         self.last_audit_log = datetime.datetime.utcnow(), -1
 
     def cog_unload(self):
-        try:
-            self.bg_task.cancel()
-            self.bot.loop.run_until_complete(self.bg_task)
-        except CancelledError:
-            logger.info('Audit log listener loop cancelled.')
+        self.bg_task.cancel()
         self._channel = None
         self.last_audit_log = datetime.datetime.utcnow(), -1
 
@@ -74,102 +70,106 @@ class Logger(commands.Cog):
         await self.bot.wait_until_ready()
         logger.info('Starting audit log listener loop.')
         while not self.bot.is_closed():
-            channel = await self.get_log_channel()
-            audits = []
-            async for audit in self.bot.guild.audit_logs(limit=30):
-                if audit.created_at < self.last_audit_log[0] or audit.id == self.last_audit_log[1]:
-                    break
-                audits.append(audit)
+            try:
+                channel = await self.get_log_channel()
+                audits = []
+                async for audit in self.bot.guild.audit_logs(limit=30):
+                    if audit.created_at < self.last_audit_log[0] or audit.id == self.last_audit_log[1]:
+                        break
+                    audits.append(audit)
 
-            for audit in reversed(audits):
-                if audit.action == AuditLogAction.channel_create:
-                    # TODO: display category
-                    name = getattr(audit.target, 'name', getattr(audit.after, 'name', 'unknown-channel'))
-                    await channel.send(embed=self.make_embed(
-                        f'Channel Created',
-                        f'#{name} has been created by {audit.user.mention}.',
-                        time=audit.created_at,
-                        fields=[('Channel ID:', audit.target.id, True)]
-                    ))
+                for audit in reversed(audits):
+                    if audit.action == AuditLogAction.channel_create:
+                        # TODO: display category
+                        name = getattr(audit.target, 'name', getattr(audit.after, 'name', 'unknown-channel'))
+                        await channel.send(embed=self.make_embed(
+                            f'Channel Created',
+                            f'#{name} has been created by {audit.user.mention}.',
+                            time=audit.created_at,
+                            fields=[('Channel ID:', audit.target.id, True)]
+                        ))
 
-                elif audit.action == AuditLogAction.channel_update:
-                    name = getattr(audit.target, 'name',
-                                   getattr(audit.after, 'name',
-                                           getattr(audit.before, 'name', 'unknown-channel')
-                                           )
-                                   )
-                    await channel.send(embed=self.make_embed(
-                        f'Channel Updated',
-                        f'#{name} has been updated by {audit.user.mention}.',
-                        time=audit.created_at,
-                        fields=[
-                            ('Channel ID:', audit.target.id, True),
-                            ('Changes:', ', '.join(map(lambda n, v: n.replace('_', ' ').title(),
-                                                       iter(audit.after))), False)
-                        ]
-                    ))
+                    elif audit.action == AuditLogAction.channel_update:
+                        name = getattr(audit.target, 'name',
+                                       getattr(audit.after, 'name',
+                                               getattr(audit.before, 'name', 'unknown-channel')
+                                               )
+                                       )
+                        await channel.send(embed=self.make_embed(
+                            f'Channel Updated',
+                            f'#{name} has been updated by {audit.user.mention}.',
+                            time=audit.created_at,
+                            fields=[
+                                ('Channel ID:', audit.target.id, True),
+                                ('Changes:', ', '.join(map(lambda n, v: n.replace('_', ' ').title(),
+                                                           iter(audit.after))), False)
+                            ]
+                        ))
 
-                elif audit.action == AuditLogAction.channel_delete:
-                    name = getattr(audit.target, 'name', getattr(audit.before, 'name', audit.target.id))
-                    await channel.send(embed=self.make_embed(
-                        f'Channel Deleted',
-                        f'#{name} has been deleted by {audit.user.mention}.',
-                        time=audit.created_at,
-                        fields=[('Channel ID:', audit.target.id, True)]
-                    ))
+                    elif audit.action == AuditLogAction.channel_delete:
+                        name = getattr(audit.target, 'name', getattr(audit.before, 'name', audit.target.id))
+                        await channel.send(embed=self.make_embed(
+                            f'Channel Deleted',
+                            f'#{name} has been deleted by {audit.user.mention}.',
+                            time=audit.created_at,
+                            fields=[('Channel ID:', audit.target.id, True)]
+                        ))
 
-                elif audit.action == AuditLogAction.kick:
-                    await channel.send(embed=self.make_embed(
-                        f'Member Kicked',
-                        f'{audit.target.mention} has been kicked by {audit.user.mention}.',
-                        time=audit.created_at,
-                        fields=[('Reason:', audit.reason or 'No Reason', False)]
-                    ))
+                    elif audit.action == AuditLogAction.kick:
+                        await channel.send(embed=self.make_embed(
+                            f'Member Kicked',
+                            f'{audit.target.mention} has been kicked by {audit.user.mention}.',
+                            time=audit.created_at,
+                            fields=[('Reason:', audit.reason or 'No Reason', False)]
+                        ))
 
-                elif audit.action == AuditLogAction.member_prune:
-                    await channel.send(embed=self.make_embed(
-                        f'Members Pruned',
-                        f'{audit.extra.members_removed} members has been pruned by {audit.user.mention}.',
-                        time=audit.created_at,
-                        fields=[('Prune days:', str(audit.extra.delete_members_days), False)]
-                    ))
+                    elif audit.action == AuditLogAction.member_prune:
+                        await channel.send(embed=self.make_embed(
+                            f'Members Pruned',
+                            f'{audit.extra.members_removed} members has been pruned by {audit.user.mention}.',
+                            time=audit.created_at,
+                            fields=[('Prune days:', str(audit.extra.delete_members_days), False)]
+                        ))
 
-                elif audit.action == AuditLogAction.ban:
-                    await channel.send(embed=self.make_embed(
-                        f'Member Banned',
-                        f'{audit.target.mention} has been banned by {audit.user.mention}.',
-                        time=audit.created_at,
-                        fields=[('Reason:', audit.reason or 'No Reason', False)]
-                    ))
+                    elif audit.action == AuditLogAction.ban:
+                        await channel.send(embed=self.make_embed(
+                            f'Member Banned',
+                            f'{audit.target.mention} has been banned by {audit.user.mention}.',
+                            time=audit.created_at,
+                            fields=[('Reason:', audit.reason or 'No Reason', False)]
+                        ))
 
-                elif audit.action == AuditLogAction.unban:
-                    await channel.send(embed=self.make_embed(
-                        f'Member Unbanned',
-                        f'{audit.target.mention} has been unbanned by {audit.user.mention}.',
-                        time=audit.created_at
-                    ))
+                    elif audit.action == AuditLogAction.unban:
+                        await channel.send(embed=self.make_embed(
+                            f'Member Unbanned',
+                            f'{audit.target.mention} has been unbanned by {audit.user.mention}.',
+                            time=audit.created_at
+                        ))
 
-                elif audit.action == AuditLogAction.message_delete:
-                    pl = '' if audit.extra.count == 1 else 's'
-                    channel_text = getattr(audit.extra.channel, 'name', 'unknown-channel')
-                    await channel.send(embed=self.make_embed(
-                        f'Message{pl} Deleted',
-                        f'{audit.user.mention} deleted {audit.extra.count} message{pl} sent by {audit.target.mention} '
-                        f'from #{channel_text}.',
-                        time=audit.created_at,
-                        fields=[('Channel ID:', audit.target.id, True)]
-                    ))
+                    elif audit.action == AuditLogAction.message_delete:
+                        pl = '' if audit.extra.count == 1 else 's'
+                        channel_text = getattr(audit.extra.channel, 'name', 'unknown-channel')
+                        await channel.send(embed=self.make_embed(
+                            f'Message{pl} Deleted',
+                            f'{audit.user.mention} deleted {audit.extra.count} message{pl} sent by {audit.target.mention} '
+                            f'from #{channel_text}.',
+                            time=audit.created_at,
+                            fields=[('Channel ID:', audit.target.id, True)]
+                        ))
 
-            if audits:
-                self.last_audit_log = audits[-1].created_at, audits[-1].id
+                if audits:
+                    self.last_audit_log = audits[-1].created_at, audits[-1].id
 
-                if len(audits) == 30:
-                    await channel.send(embed=self.make_embed(
-                        'Warning',
-                        'Due to the nature of Discord API, there may be more audits undisplayed. '
-                        'Check the audits page for a complete list of audits.'
-                    ))
-            await sleep(5)
+                    if len(audits) == 30:
+                        await channel.send(embed=self.make_embed(
+                            'Warning',
+                            'Due to the nature of Discord API, there may be more audits undisplayed. '
+                            'Check the audits page for a complete list of audits.'
+                        ))
+                await sleep(5)
+            except CancelledError:
+                break
+        logger.info('Audit log listener loop cancelled.')
 
     @commands.Cog.listener()
     async def on_raw_message_delete(self, payload):

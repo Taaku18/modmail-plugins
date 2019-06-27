@@ -34,7 +34,7 @@ class Logger(commands.Cog):
         self.last_audit_log = datetime.datetime.utcnow(), -1
 
     @commands.command()
-    @checks.has_permissions(PermissionLevel.OWNER)
+    @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
     async def lchannel(self, ctx, channel: TextChannel):
         """
         Sets the log channel.
@@ -204,7 +204,7 @@ class Logger(commands.Cog):
             fields=[('Message ID:', payload.message_id, True),
                     ('Channel ID:', payload.channel_id, True)],
             footer='The message content cannot be found, a further message may '
-                   'follow if this message was not deleted by the author.'
+                   'follow if the message was not deleted by the original author.'
         ))
 
     @commands.Cog.listener()
@@ -215,11 +215,14 @@ class Logger(commands.Cog):
 
         messages = sorted(payload.cached_messages, key=lambda msg: msg.created_at)
         message_ids = payload.message_ids
-        upload_text = 'Here are the messages that were deleted:\n'
+        pl = '' if len(message_ids) == 1 else 's'
+        pl_be = 'is' if len(message_ids) == 1 else 'are'
+        pl_be_past = 'was' if len(message_ids) == 1 else 'were'
+        upload_text = f'Here {pl_be} the message{pl} that {pl_be_past} deleted:\n'
 
         if not messages:
             upload_text += 'There are no known messages.\n'
-            upload_text += 'Unknown message IDs: ' + ', '.join(map(str, message_ids)) + '.'
+            upload_text += f'Unknown message ID{pl}: ' + ', '.join(map(str, message_ids)) + '.'
         else:
             known_message_ids = set()
             for message in messages:
@@ -229,7 +232,8 @@ class Logger(commands.Cog):
                     f'Message ID: {message.id}. {message.content}\n'
             unknown_message_ids = message_ids ^ known_message_ids
             if unknown_message_ids:
-                upload_text += 'Unknown message IDs: ' + ', '.join(map(str, unknown_message_ids)) + '.'
+                pl_unknown = '' if len(unknown_message_ids) == 1 else 's'
+                upload_text += f'Unknown message ID{pl_unknown}: ' + ', '.join(map(str, unknown_message_ids)) + '.'
 
         payload_channel = self.bot.guild.get_channel(payload.channel_id)
         if payload_channel is not None:
@@ -241,14 +245,14 @@ class Logger(commands.Cog):
             async with self.bot.session.post('https://hasteb.in/documents', data=upload_text) as resp:
                 key = (await resp.json())["key"]
                 return await channel.send(embed=self.make_embed(
-                    f'Multiple messages deleted from #{channel_text}.',
-                    f'Deleted messages: https://hasteb.in/{key}.',
+                    f'{len(message_ids)} message{pl} deleted from #{channel_text}.',
+                    f'Deleted message{pl}: https://hasteb.in/{key}.',
                     fields=[('Channel ID:', payload.channel_id, True)]
                 ))
         except (JSONDecodeError, ClientResponseError, IndexError):
             return await channel.send(embed=self.make_embed(
-                f'Multiple messages deleted from {channel_text}.',
-                'Failed to upload to Hastebin. Deleted message IDs: ' + ', '.join(map(str, message_ids)) + '.',
+                f'{len(message_ids)} message{pl} deleted from {channel_text}.',
+                f'Failed to upload to Hastebin. Deleted message ID{pl}: ' + ', '.join(map(str, message_ids)) + '.',
                 fields=[('Channel ID', payload.channel_id, True)]
             ))
 

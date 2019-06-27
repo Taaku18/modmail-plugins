@@ -32,8 +32,10 @@ class Logger(commands.Cog):
         try:
             self.bg_task.cancel()
             self.bot.loop.run_until_complete(self.bg_task)
-        except (CancelledError, RuntimeError):
+        except CancelledError:
             logger.info('Audit log listener loop cancelled.')
+        self._channel = None
+        self.last_audit_log = datetime.datetime.utcnow(), -1
 
     @commands.command()
     @checks.has_permissions(PermissionLevel.OWNER)
@@ -45,6 +47,7 @@ class Logger(commands.Cog):
         await ctx.send(f'Successfully set logger channel to: {channel.mention}.')
 
     async def set_log_channel(self, channel):
+        logger.info('Setting channel_id for logger.')
         await self.db.find_one_and_update(
             {'_id': 'logger-config'},
             {'$set': {'channel_id': channel.id}},
@@ -55,6 +58,7 @@ class Logger(commands.Cog):
     async def get_log_channel(self):
         if self._channel is not None:
             return self._channel
+        logger.info('Retrieving channel_id for logger from config.')
         config = await self.db.find_one({'_id': 'logger-config'})
         if config is None:
             raise ValueError(f'No logger channel specified, set one with `{self.bot.prefix}lchannel #channel`.')
@@ -75,12 +79,11 @@ class Logger(commands.Cog):
             async for audit in self.bot.guild.audit_logs(limit=30):
                 if audit.created_at < self.last_audit_log[0] or audit.id == self.last_audit_log[1]:
                     break
-                audits.insert(0, audit)
+                audits.append(audit)
 
-            for audit in audits:
-                self.last_audit_log = audit.created_at, audit.id
-
+            for audit in reversed(audits):
                 if audit.action == AuditLogAction.channel_create:
+                    # TODO: display category
                     name = getattr(audit.target, 'name', getattr(audit.after, 'name', 'unknown-channel'))
                     await channel.send(embed=self.make_embed(
                         f'Channel Created',
@@ -156,12 +159,16 @@ class Logger(commands.Cog):
                         time=audit.created_at,
                         fields=[('Channel ID:', audit.target.id, True)]
                     ))
-            if len(audits) == 30:
-                await channel.send(embed=self.make_embed(
-                    'Warning',
-                    'Due to the nature of Discord API, there may be more audits undisplayed. '
-                    'Check the audits page for a complete list of audits.'
-                ))
+
+            if audits:
+                self.last_audit_log = audits[-1].created_at, audits[-1].id
+
+                if len(audits) == 30:
+                    await channel.send(embed=self.make_embed(
+                        'Warning',
+                        'Due to the nature of Discord API, there may be more audits undisplayed. '
+                        'Check the audits page for a complete list of audits.'
+                    ))
             await sleep(5)
 
     @commands.Cog.listener()
@@ -181,8 +188,7 @@ class Logger(commands.Cog):
                 message.content,
                 fields=[('Message ID:', payload.message_id, True),
                         ('Channel ID:', payload.channel_id, True),
-                        ('Message sent on:', f'[{time}](https://time.is/{md_time}?Message_Deleted)', True)
-                        ]
+                        ('Message sent on:', f'[{time}](https://time.is/{md_time}?Message_Deleted)', True)]
             ))
 
         payload_channel = self.bot.guild.get_channel(payload.channel_id)
@@ -195,8 +201,7 @@ class Logger(commands.Cog):
             'The message content cannot be found, a further message may '
             'follow if this message was not deleted by the author.',
             fields=[('Message ID:', payload.message_id, True),
-                    ('Channel ID:', payload.channel_id, True)
-                    ]
+                    ('Channel ID:', payload.channel_id, True)]
         ))
 
     @commands.Cog.listener()
@@ -257,12 +262,11 @@ class Logger(commands.Cog):
             return
 
         payload_channel = self.bot.guild.get_channel(channel_id)
-        if payload_channel is not None:
-            if payload_channel.guild.id != self.bot.guild_id:
-                return
-            channel_text = payload_channel.name
-        else:
-            channel_text = 'deleted-channel'
+        if payload_channel is None:
+            return
+        if payload_channel.guild.id != self.bot.guild_id:
+            return
+        channel_text = payload_channel.name
 
         channel = await self.get_log_channel()
 
@@ -281,32 +285,30 @@ class Logger(commands.Cog):
                         ]
             ))
 
-        if payload_channel is not None:
-            try:
-                message = await payload_channel.fetch_message(message_id)
-                time = message.created_at.strftime('%b %-d, %Y at %-I:%M %p UTC')
-                md_time = message.created_at.strftime('%H%M_%d_%B_%Y_in_UTC')
+        try:
+            message = await payload_channel.fetch_message(message_id)
+            time = message.created_at.strftime('%b %-d, %Y at %-I:%M %p UTC')
+            md_time = message.created_at.strftime('%H%M_%d_%B_%Y_in_UTC')
 
-                return await channel.send(embed=self.make_embed(
-                    f'A message was updated in #{channel_text}.',
-                    'The former message content cannot be found.',
-                    fields=[('Now', new_content or 'No Content', False),
-                            ('Message ID:', f'[{message_id}]({message.jump_url})', True),
-                            ('Channel ID:', channel_id, True),
-                            ('Sent by:', message.author.mention, True),
-                            ('Message sent on:', f'[{time}](https://time.is/{md_time}?Message_Edited)', True),
-                            ]
-                ))
-            except NotFound:
-                pass
-        return await channel.send(embed=self.make_embed(
-            f'A message was updated in {channel_text}.',
-            'The former message content cannot be found.',
-            fields=[('Now', new_content or 'No Content', False),
-                    ('Message ID:', message_id, True),
-                    ('Channel ID:', channel_id, True)
-                    ]
-        ))
+            return await channel.send(embed=self.make_embed(
+                f'A message was updated in #{channel_text}.',
+                'The former message content cannot be found.',
+                fields=[('Now', new_content or 'No Content', False),
+                        ('Message ID:', f'[{message_id}]({message.jump_url})', True),
+                        ('Channel ID:', channel_id, True),
+                        ('Sent by:', message.author.mention, True),
+                        ('Message sent on:', f'[{time}](https://time.is/{md_time}?Message_Edited)', True),
+                        ]
+            ))
+        except NotFound:
+            return await channel.send(embed=self.make_embed(
+                f'A message was updated in {channel_text}.',
+                'The former message content cannot be found.',
+                fields=[('Now', new_content or 'No Content', False),
+                        ('Message ID:', message_id, True),
+                        ('Channel ID:', channel_id, True)
+                        ]
+            ))
 
     @commands.Cog.listener()
     async def on_member_join(self, member):
@@ -330,8 +332,7 @@ class Logger(commands.Cog):
 
     def make_embed(self, title, description='', *, time=None, fields=None):
         embed = Embed(title=title, description=description, color=self.bot.main_color)
-        time = time if time is not None else datetime.datetime.utcnow()
-        embed.timestamp = time
+        embed.timestamp = time if time is not None else datetime.datetime.utcnow()
         if fields is not None:
             for n, v, i in fields:
                 n = str(n)

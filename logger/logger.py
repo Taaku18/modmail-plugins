@@ -90,6 +90,7 @@ class Logger(commands.Cog):
                         ))
 
                     elif audit.action == AuditLogAction.channel_update:
+                        logger.critical(str(audit.id) + str(audit.created_at) + str(audit.target) + str(audit.after))
                         name = getattr(audit.target, 'name',
                                        getattr(audit.after, 'name',
                                                getattr(audit.before, 'name', 'unknown-channel')
@@ -151,8 +152,8 @@ class Logger(commands.Cog):
                         channel_text = getattr(audit.extra.channel, 'name', 'unknown-channel')
                         await channel.send(embed=self.make_embed(
                             f'Message{pl} Deleted',
-                            f'{audit.user.mention} deleted {audit.extra.count} message{pl} sent by {audit.target.mention} '
-                            f'from #{channel_text}.',
+                            f'{audit.user.mention} deleted {audit.extra.count} message{pl} sent by '
+                            f'{audit.target.mention} from #{channel_text}.',
                             time=audit.created_at,
                             fields=[('Channel ID:', audit.target.id, True)]
                         ))

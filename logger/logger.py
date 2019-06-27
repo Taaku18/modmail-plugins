@@ -339,7 +339,6 @@ class Logger(commands.Cog):
 
     def make_embed(self, title, description='', *, time=None, fields=None, footer=None):
         embed = Embed(title=title, description=description, color=self.bot.main_color)
-        logger.critical(time)
         embed.timestamp = time if time is not None else datetime.datetime.utcnow()
         if fields is not None:
             for n, v, i in fields:

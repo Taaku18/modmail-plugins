@@ -185,10 +185,11 @@ class Logger(commands.Cog):
             return await channel.send(embed=self.make_embed(
                 f'A message sent by {message.author.name}#{message.author.discriminator} '
                 f'({message.author.id}) has been deleted from #{message.channel.name}.',
-                message.content,
+                message.content or 'No Content',
                 fields=[('Message ID:', payload.message_id, True),
                         ('Channel ID:', payload.channel_id, True),
-                        ('Message sent on:', f'[{time}](https://time.is/{md_time}?Message_Deleted)', True)]
+                        ('Message sent on:', f'[{time}](https://time.is/{md_time}?Message_Deleted)', True)],
+                footer='A further message may follow if this message was not deleted by the author.'
             ))
 
         payload_channel = self.bot.guild.get_channel(payload.channel_id)
@@ -198,10 +199,10 @@ class Logger(commands.Cog):
             channel_text = 'deleted-channel'
         return await channel.send(embed=self.make_embed(
             f'A message was deleted in #{channel_text}.',
-            'The message content cannot be found, a further message may '
-            'follow if this message was not deleted by the author.',
             fields=[('Message ID:', payload.message_id, True),
-                    ('Channel ID:', payload.channel_id, True)]
+                    ('Channel ID:', payload.channel_id, True)],
+            footer='The message content cannot be found, a further message may '
+                   'follow if this message was not deleted by the author.'
         ))
 
     @commands.Cog.listener()
@@ -330,7 +331,7 @@ class Logger(commands.Cog):
             f'{member.mention} has left.'
         ))
 
-    def make_embed(self, title, description='', *, time=None, fields=None):
+    def make_embed(self, title, description='', *, time=None, fields=None, footer=None):
         embed = Embed(title=title, description=description, color=self.bot.main_color)
         embed.timestamp = time if time is not None else datetime.datetime.utcnow()
         if fields is not None:
@@ -345,6 +346,8 @@ class Logger(commands.Cog):
                     logger.info('Name/body too long: %s, %s', n, v)
                     continue
                 embed.add_field(name=n, value=v, inline=i)
+        if footer is not None:
+            embed.set_footer(text=footer)
         return embed
 
 

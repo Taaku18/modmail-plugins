@@ -90,7 +90,6 @@ class Logger(commands.Cog):
                         ))
 
                     elif audit.action == AuditLogAction.channel_update:
-                        logger.critical(str(audit.id) + str(audit.created_at) + str(audit.target) + str(audit.after))
                         name = getattr(audit.target, 'name',
                                        getattr(audit.after, 'name',
                                                getattr(audit.before, 'name', 'unknown-channel')
@@ -102,7 +101,7 @@ class Logger(commands.Cog):
                             time=audit.created_at,
                             fields=[
                                 ('Channel ID:', audit.target.id, True),
-                                ('Changes:', ', '.join(map(lambda n, v: n.replace('_', ' ').title(),
+                                ('Changes:', ', '.join(map(lambda a: a[0].replace('_', ' ').title(),
                                                            iter(audit.after))), False)
                             ]
                         ))
@@ -170,6 +169,8 @@ class Logger(commands.Cog):
                 await sleep(5)
             except CancelledError:
                 break
+            except Exception:
+                logger.error('An error in audit loop occurred', exc_info=True)
         logger.info('Audit log listener loop cancelled.')
 
     @commands.Cog.listener()

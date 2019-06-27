@@ -185,11 +185,11 @@ class Logger(commands.Cog):
             md_time = message.created_at.strftime('%H%M_%d_%B_%Y_in_UTC')
 
             return await channel.send(embed=self.make_embed(
-                f'A message sent by {message.author.name}#{message.author.discriminator} '
-                f'({message.author.id}) has been deleted from #{message.channel.name}.',
+                f'A message has been deleted from #{message.channel.name}.',
                 message.content or 'No Content',
                 fields=[('Message ID:', payload.message_id, True),
                         ('Channel ID:', payload.channel_id, True),
+                        ('Sent by:', message.author.mention, True),
                         ('Message sent on:', f'[{time}](https://time.is/{md_time}?Message_Deleted)', True)],
                 footer='A further message may follow if this message was not deleted by the author.'
             ))
@@ -264,7 +264,7 @@ class Logger(commands.Cog):
         new_content = payload.data.get('content', '')
         old_message = payload.cached_message
 
-        if not new_content or new_content == old_message.content:
+        if not new_content or (old_message and new_content == old_message.content):
             # Currently does not support Embed edits
             return
 
@@ -339,6 +339,7 @@ class Logger(commands.Cog):
 
     def make_embed(self, title, description='', *, time=None, fields=None, footer=None):
         embed = Embed(title=title, description=description, color=self.bot.main_color)
+        logger.critical(time)
         embed.timestamp = time if time is not None else datetime.datetime.utcnow()
         if fields is not None:
             for n, v, i in fields:

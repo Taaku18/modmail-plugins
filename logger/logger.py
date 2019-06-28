@@ -104,8 +104,8 @@ class Logger(commands.Cog):
                                     f'**#{name}** has been created by {audit.user.mention} '
                                     f'under "**{escape_markdown(cat.name)}**" category.',
                                     time=audit.created_at,
-                                    fields=[('Channel ID:', audit.target.id, True,
-                                             'Category ID:', cat.id, True)]
+                                    fields=[('Channel ID:', audit.target.id, True),
+                                            ('Category ID:', cat.id, True)]
                                 ))
                             else:
                                 await channel.send(embed=self.make_embed(

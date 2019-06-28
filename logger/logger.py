@@ -237,7 +237,10 @@ class Logger(commands.Cog):
         message = payload.cached_message
 
         if message:
-            time = message.created_at.strftime('%b %-d at %-I:%M %p UTC')
+            try:
+                time = message.created_at.strftime('%b %-d at %-I:%M %p UTC')
+            except ValueError:
+                time = message.created_at.strftime('%b %d at %I:%M %p UTC')
             md_time = message.created_at.strftime('%H%M_%d_%B_%Y_in_UTC')
 
             return await channel.send(embed=self.make_embed(
@@ -283,7 +286,10 @@ class Logger(commands.Cog):
             known_message_ids = set()
             for message in messages:
                 known_message_ids.add(message.id)
-                time = message.created_at.strftime('%b %-d at %-I:%M %p')
+                try:
+                    time = message.created_at.strftime('%b %-d at %-I:%M %p')
+                except ValueError:
+                    time = message.created_at.strftime('%b %d at %I:%M %p')
                 upload_text += f'{time} {message.author.name}•{message.author.discriminator} ({message.author.id}). ' \
                     f'Message ID: {message.id}. {message.content}\n'
             unknown_message_ids = message_ids ^ known_message_ids
@@ -334,7 +340,10 @@ class Logger(commands.Cog):
         channel = await self.get_log_channel()
 
         if old_message:
-            time = old_message.created_at.strftime('%b %-d, %Y at %-I:%M %p UTC')
+            try:
+                time = old_message.created_at.strftime('%b %-d, %Y at %-I:%M %p UTC')
+            except ValueError:
+                time = old_message.created_at.strftime('%b %d, %Y at %I:%M %p UTC')
             md_time = old_message.created_at.strftime('%H%M_%d_%B_%Y_in_UTC')
 
             return await channel.send(embed=self.make_embed(
@@ -350,7 +359,10 @@ class Logger(commands.Cog):
 
         try:
             message = await payload_channel.fetch_message(message_id)
-            time = message.created_at.strftime('%b %-d, %Y at %-I:%M %p UTC')
+            try:
+                time = message.created_at.strftime('%b %-d, %Y at %-I:%M %p UTC')
+            except ValueError:
+                time = message.created_at.strftime('%b %d, %Y at %I:%M %p UTC')
             md_time = message.created_at.strftime('%H%M_%d_%B_%Y_in_UTC')
 
             return await channel.send(embed=self.make_embed(

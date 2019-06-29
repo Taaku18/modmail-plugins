@@ -130,7 +130,7 @@ class Logger(commands.Cog):
                 async for audit in self.bot.guild.audit_logs(limit=30):
                     if audit.created_at < self.last_audit_log[0] or audit.id == self.last_audit_log[1]:
                         break
-                    if not await self.is_log_modmail() and audit.user.id == self.bot.id:
+                    if not await self.is_log_modmail() and audit.user.id == self.bot.user.id:
                         continue
                     audits.append(audit)
 
@@ -286,7 +286,7 @@ class Logger(commands.Cog):
         message = payload.cached_message
 
         if message:
-            if not await self.is_log_modmail() and message.author.id == self.bot.id:
+            if not await self.is_log_modmail() and message.author.id == self.bot.user.id:
                 return
 
             try:
@@ -392,7 +392,7 @@ class Logger(commands.Cog):
         channel = await self.get_log_channel()
 
         if old_message:
-            if not await self.is_log_modmail() and old_message.author.id == self.bot.id:
+            if not await self.is_log_modmail() and old_message.author.id == self.bot.user.id:
                 return
 
             try:
@@ -414,7 +414,7 @@ class Logger(commands.Cog):
 
         try:
             message = await payload_channel.fetch_message(message_id)
-            if not await self.is_log_modmail() and message.author.id == self.bot.id:
+            if not await self.is_log_modmail() and message.author.id == self.bot.user.id:
                 return
             try:
                 time = message.created_at.strftime('%b %-d, %Y at %-I:%M %p UTC')

@@ -286,8 +286,12 @@ class Logger(commands.Cog):
         message = payload.cached_message
 
         if message:
-            if not await self.is_log_modmail() and message.author.id == self.bot.user.id:
-                return
+            if not await self.is_log_modmail():
+                if message.author.id == self.bot.user.id:
+                    return
+                elif await self.bot.db.logs.count_documents(
+                        {"messages.message_id": str(payload.message_id), "messages.type": "thread_message"}, limit=1):
+                    return
 
             try:
                 time = message.created_at.strftime('%b %-d at %-I:%M %p UTC')

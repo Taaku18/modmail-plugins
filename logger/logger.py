@@ -304,7 +304,9 @@ class Logger(commands.Cog):
                         ('Message sent on:', f'[{time}](https://time.is/{md_time}?Message_Deleted)', True)],
                 footer='A further message may follow if this message was not deleted by the author.'
             ))
-
+        if not await self.is_log_modmail() and await self.bot.db.logs.count_documents(
+                {"messages.message_id": str(payload.message_id), "messages.type": "thread_message"}, limit=1):
+            return
         payload_channel = self.bot.guild.get_channel(payload.channel_id)
         if payload_channel is not None:
             channel_text = payload_channel.name

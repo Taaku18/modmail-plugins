@@ -133,6 +133,9 @@ class Logger(commands.Cog):
     @commands.command()
     @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
     async def nolog(self, ctx, *, channel: typing.Union[TextChannel, CategoryChannel]):
+        """
+        Toggle whether to log a channel or category.
+        """
         id = str(channel.id)
         config = await self.db.find_one({'_id': 'logger-config'})
         if config is None:

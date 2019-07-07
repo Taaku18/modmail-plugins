@@ -1,5 +1,5 @@
 import datetime
-from asyncio import sleep, CancelledError
+import typing
 from logging import getLogger
 from json import JSONDecodeError
 
@@ -95,7 +95,10 @@ class Logger(commands.Cog):
 
         Ie. threads channel created, help msgs edits, reply msgs, etc.
         """
-        target = not await self.is_log_modmail()
+        try:
+            target = not await self.is_log_modmail()
+        except ValueError as e:
+            return await ctx.send(str(e))
         await self.db.find_one_and_update(
             {'_id': 'logger-config'},
             {'$set': {'log_modmail': target}},
@@ -112,7 +115,7 @@ class Logger(commands.Cog):
         if isinstance(self._log_modmail, bool):
             return self._log_modmail
         config = await self.db.find_one({'_id': 'logger-config'})
-        if config is None:
+        if config is None or config.get('channel_id') is None:
             raise ValueError(f'No logger channel specified, set one with `{self.bot.prefix}lchannel #channel`.')
         log_modmail = config.get('log_modmail')
         if not isinstance(log_modmail, bool):
@@ -127,6 +130,42 @@ class Logger(commands.Cog):
         self._log_modmail = log_modmail
         return log_modmail
 
+    @commands.command()
+    @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
+    async def nolog(self, ctx, *, channel: typing.Union[TextChannel, CategoryChannel, int]):
+        """
+        Toggle whether to log a channel or category.
+        """
+        id = str(getattr(channel, 'id', channel))
+        name = str(getattr(channel, 'mention', channel))
+
+        config = await self.db.find_one({'_id': 'logger-config'})
+        if config is None:
+            return await ctx.send(f'No logger channel specified, set one with `{self.bot.prefix}lchannel #channel`.')
+        blocked = config.get('no_log', [])
+        add = id not in blocked
+        if add:
+            blocked.append(id)
+            await self.db.find_one_and_update(
+                {'_id': 'logger-config'},
+                {'$set': {'no_log': blocked}}
+            )
+            return await ctx.send(f'{name} will no longer be logged.')
+        blocked.remove(id)
+        await self.db.find_one_and_update(
+            {'_id': 'logger-config'},
+            {'$set': {'no_log': blocked}}
+        )
+        return await ctx.send(f'{name} will now be logged.')
+
+    async def is_logged(self, id):
+        id = str(id)
+        config = await self.db.find_one({'_id': 'logger-config'})
+        if config is None or config.get('channel_id') is None:
+            raise ValueError(f'No logger channel specified, set one with `{self.bot.prefix}lchannel #channel`.')
+        log_modmail = config.get('no_log', [])
+        return id not in log_modmail
+
     @loop_(seconds=5)
     async def audit_logs_logger(self):
         channel = await self.get_log_channel()
@@ -140,6 +179,8 @@ class Logger(commands.Cog):
 
         for audit in reversed(audits):
             if audit.action == AuditLogAction.channel_create:
+                if not await self.is_logged(audit.target.id):
+                    continue
                 name = escape_markdown(getattr(audit.target, 'name',
                                                getattr(audit.after, 'name', 'unknown-channel')))
                 if isinstance(audit.target, CategoryChannel):
@@ -169,6 +210,8 @@ class Logger(commands.Cog):
                         ))
 
             elif audit.action == AuditLogAction.channel_update:
+                if not await self.is_logged(audit.target.id):
+                    continue
                 name = escape_markdown(
                     getattr(audit.target, 'name',
                             getattr(audit.after, 'name', getattr(audit.before, 'name', 'unknown-channel'))))
@@ -256,6 +299,9 @@ class Logger(commands.Cog):
                 ))
 
             elif audit.action == AuditLogAction.message_delete:
+                if not await self.is_logged(audit.extra.channel.id):
+                    continue
+
                 pl = '' if audit.extra.count == 1 else 's'
                 channel_text = getattr(audit.extra.channel, 'name', 'unknown-channel')
                 await channel.send(embed=self.make_embed(
@@ -289,6 +335,9 @@ class Logger(commands.Cog):
     async def on_raw_message_delete(self, payload):
         if payload.guild_id != self.bot.guild_id:
             return
+        if not await self.is_logged(payload.channel_id):
+            return
+
         channel = await self.get_log_channel()
         message = payload.cached_message
 
@@ -335,6 +384,9 @@ class Logger(commands.Cog):
     async def on_raw_bulk_message_delete(self, payload):
         if payload.guild_id != self.bot.guild_id:
             return
+        if not await self.is_logged(payload.channel_id):
+            return
+
         channel = await self.get_log_channel()
 
         messages = sorted(payload.cached_messages, key=lambda msg: msg.created_at)
@@ -386,6 +438,9 @@ class Logger(commands.Cog):
     @commands.Cog.listener()
     async def on_raw_message_edit(self, payload):
         channel_id = int(payload.data['channel_id'])
+        if not await self.is_logged(channel_id):
+            return
+
         message_id = int(payload.data['id'])
 
         new_content = payload.data.get('content', '')

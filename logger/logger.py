@@ -132,11 +132,13 @@ class Logger(commands.Cog):
 
     @commands.command()
     @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
-    async def nolog(self, ctx, *, channel: typing.Union[TextChannel, CategoryChannel]):
+    async def nolog(self, ctx, *, channel: typing.Union[TextChannel, CategoryChannel, int]):
         """
         Toggle whether to log a channel or category.
         """
-        id = str(channel.id)
+        id = str(getattr(channel, 'id', channel))
+        name = str(getattr(channel, 'mention', channel))
+
         config = await self.db.find_one({'_id': 'logger-config'})
         if config is None:
             return await ctx.send(f'No logger channel specified, set one with `{self.bot.prefix}lchannel #channel`.')
@@ -148,13 +150,13 @@ class Logger(commands.Cog):
                 {'_id': 'logger-config'},
                 {'$set': {'no_log': blocked}}
             )
-            return await ctx.send(f'{channel.mention} will no longer be logged.')
+            return await ctx.send(f'{name} will no longer be logged.')
         blocked.remove(id)
         await self.db.find_one_and_update(
             {'_id': 'logger-config'},
             {'$set': {'no_log': blocked}}
         )
-        return await ctx.send(f'{channel.mention} will now be logged.')
+        return await ctx.send(f'{name} will now be logged.')
 
     async def is_logged(self, id):
         id = str(id)

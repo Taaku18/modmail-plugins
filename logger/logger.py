@@ -526,7 +526,7 @@ class Logger(commands.Cog):
             return
         channel = await self.get_log_channel()
         await channel.send(embed=self.make_embed(
-            'Member Joined',
+            'Member Left',
             f'{member.mention} has left.'
         ))
 

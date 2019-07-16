@@ -76,7 +76,7 @@ class Logger(commands.Cog):
         channel_id = config.get('channel_id')
         if channel_id is None:
             raise ValueError(f'No logger channel specified, set one with `{self.bot.prefix}lchannel #channel`.')
-        channel = self.bot.guild.get_channel(channel_id)
+        channel = self.bot.guild.get_channel(channel_id) or self.bot.modmail_guild.get_channel(channel_id)
         if channel is None:
             await self.db.find_one_and_update(
                 {'_id': 'logger-config'},
@@ -278,9 +278,9 @@ class Logger(commands.Cog):
             elif audit.action == AuditLogAction.member_prune:
                 await channel.send(embed=self.make_embed(
                     f'Members Pruned',
-                    f'**{audit.extra.members_removed}** members were pruned by {audit.user.mention}.',
+                    f'**{getattr(audit.extra, "members_removed", None)}** members were pruned by {audit.user.mention}.',
                     time=audit.created_at,
-                    fields=[('Prune days:', str(audit.extra.delete_members_days), False)]
+                    fields=[('Prune days:', str(getattr(audit.extra, 'delete_members_days', None)), False)]
                 ))
 
             elif audit.action == AuditLogAction.ban:

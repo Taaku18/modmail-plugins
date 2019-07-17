@@ -5,7 +5,7 @@ from json import JSONDecodeError
 
 from aiohttp import ClientResponseError
 
-from discord import Embed, TextChannel, NotFound, CategoryChannel
+from discord import Embed, TextChannel, NotFound, CategoryChannel, PermissionOverwrite
 from discord.ext import commands, tasks
 from discord.enums import AuditLogAction
 from discord.utils import escape_markdown, escape_mentions
@@ -55,10 +55,18 @@ class Logger(commands.Cog):
 
     @logger_.command()
     @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
-    async def channel(self, ctx, channel: TextChannel):
+    async def channel(self, ctx, channel: typing.Union[TextChannel, CategoryChannel]):
         """
         Sets the log channel.
+
+        Channel can also be a category ID / name, a channel named modmail-logger will be created.
         """
+        if isinstance(channel, CategoryChannel):
+            channel = await channel.create_text_channel('modmail-logger', overwrites={
+                ctx.guild.default_role: PermissionOverwrite(send_messages=False),
+                ctx.guild.me: PermissionOverwrite(send_messages=True)
+            })
+
         await self.set_log_channel(channel)
         await ctx.send(f'Successfully set logger channel to: {channel.mention}.')
 

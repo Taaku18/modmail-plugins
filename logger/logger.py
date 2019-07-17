@@ -40,6 +40,7 @@ class Logger(commands.Cog):
         self.db = bot.plugin_db.get_partition(self)
         self._channel = None
         self._log_modmail = None
+        self._log_bot = None
         self.audit_logs_logger.start()
         self.last_audit_log = datetime.datetime.utcnow(), -1
 
@@ -144,6 +145,46 @@ class Logger(commands.Cog):
         self._log_modmail = log_modmail
         return log_modmail
 
+    @logger_.command(name='log-bot')
+    @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
+    async def log_bot(self, ctx):
+        """
+        Toggle whether to log bot activities. Defaults no.
+        """
+        try:
+            target = not await self.is_log_bot()
+        except ValueError as e:
+            return await ctx.send(str(e))
+        await self.db.find_one_and_update(
+            {'_id': 'logger-config'},
+            {'$set': {'log_bot': target}},
+            upsert=True
+        )
+        logger.debug('Setting log_bot to %s.', target)
+        self._log_bot = target
+        if target:
+            await ctx.send('Logger will now log bot messages.')
+        else:
+            await ctx.send('Logger will stop logging bot messages.')
+
+    async def is_log_bot(self):
+        if isinstance(self._log_bot, bool):
+            return self._log_bot
+        config = await self.db.find_one({'_id': 'logger-config'})
+        if (config or {}).get('channel_id') is None:
+            raise ValueError(f'No logger channel specified, set one with `{self.bot.prefix}logger channel #channel`.')
+        log_bot = config.get('log_bot')
+        if not isinstance(log_bot, bool):
+            logger.debug('Setting log_bot to False for the first time.')
+            await self.db.find_one_and_update(
+                {'_id': 'logger-config'},
+                {'$set': {'log_bot': False}},
+                upsert=True
+            )
+            log_bot = True
+        self._log_bot = log_bot
+        return log_bot
+
     @logger_.command()
     @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
     async def whitelist(self, ctx, *, channel: typing.Union[TextChannel, int]):
@@ -196,6 +237,8 @@ class Logger(commands.Cog):
                 break
             try:
                 if not await self.is_log_modmail() and audit.user.id == self.bot.user.id:
+                    continue
+                if not await self.is_log_bot() and audit.user.bot:
                     continue
             except ValueError as e:
                 logger.warning(str(e))
@@ -373,6 +416,8 @@ class Logger(commands.Cog):
                 elif await self.bot.db.logs.count_documents(
                         {"messages.message_id": str(payload.message_id), "messages.type": "thread_message"}, limit=1):
                     return
+            if not await self.is_log_bot() and message.author.bot:
+                return
 
             try:
                 time = message.created_at.strftime('%b %-d at %-I:%M %p UTC')
@@ -389,7 +434,7 @@ class Logger(commands.Cog):
                         ('Message sent on:', f'[{time}](https://time.is/{md_time}?Message_Deleted)', True)],
                 footer='A further message may follow if this message was not deleted by the author.'
             ))
-        if not await self.is_log_modmail() and await self.bot.db.logs.count_documents(
+        if (not await self.is_log_modmail() or not await self.is_log_bot()) and await self.bot.db.logs.count_documents(
                 {"messages.message_id": str(payload.message_id), "messages.type": "thread_message"}, limit=1):
             return
         payload_channel = self.bot.guild.get_channel(payload.channel_id)
@@ -492,6 +537,8 @@ class Logger(commands.Cog):
 
                 if not await self.is_log_modmail() and message.author.id == self.bot.user.id:
                     return
+                if not await self.is_log_bot() and message.author.bot:
+                    return
 
                 try:
                     time = message.created_at.strftime('%b %-d, %Y at %-I:%M %p UTC')
@@ -518,6 +565,8 @@ class Logger(commands.Cog):
         if old_message:
             if not await self.is_log_modmail() and old_message.author.id == self.bot.user.id:
                 return
+            if not await self.is_log_bot() and old_message.author.bot:
+                return
 
             try:
                 time = old_message.created_at.strftime('%b %-d, %Y at %-I:%M %p UTC')
@@ -539,6 +588,8 @@ class Logger(commands.Cog):
         try:
             message = await payload_channel.fetch_message(message_id)
             if not await self.is_log_modmail() and message.author.id == self.bot.user.id:
+                return
+            if not await self.is_log_bot() and message.author.bot:
                 return
             try:
                 time = message.created_at.strftime('%b %-d, %Y at %-I:%M %p UTC')

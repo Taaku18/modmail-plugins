@@ -477,10 +477,6 @@ class Logger(commands.Cog):
         new_content = payload.data.get('content', '')
         old_message = payload.cached_message
 
-        if not new_content or (old_message and new_content == old_message.content):
-            # Currently does not support Embed edits
-            return
-
         payload_channel = self.bot.guild.get_channel(channel_id)
         if payload_channel is None:
             return
@@ -488,6 +484,36 @@ class Logger(commands.Cog):
             return
 
         channel_text = payload_channel.name
+
+        if not new_content or (old_message and new_content == old_message.content):
+            # Currently does not support Embed edits
+            try:
+                message = await payload_channel.fetch_message(message_id)
+
+                if not await self.is_log_modmail() and message.author.id == self.bot.user.id:
+                    return
+
+                try:
+                    time = message.created_at.strftime('%b %-d, %Y at %-I:%M %p UTC')
+                except ValueError:
+                    time = message.created_at.strftime('%b %d, %Y at %I:%M %p UTC')
+                md_time = message.created_at.strftime('%H%M_%d_%B_%Y_in_UTC')
+
+                return await channel.send(embed=self.make_embed(
+                    f'A message was updated in #{channel_text}.',
+                    'No text content was updated (possibly an embed / files edit).',
+                    fields=[('Message ID:', f'[{message_id}]({message.jump_url})', True),
+                            ('Channel ID:', channel_id, True),
+                            ('Sent by:', message.author.mention, True),
+                            ('Message sent on:', f'[{time}](https://time.is/{md_time}?Message_Edited)', True)]
+                ))
+            except NotFound:
+                return await channel.send(embed=self.make_embed(
+                    f'A message was updated in #{channel_text}.',
+                    'No text content was updated (possibly an embed / files edit).',
+                    fields=[('Message ID:', message_id, True),
+                            ('Channel ID:', channel_id, True)]
+                ))
 
         if old_message:
             if not await self.is_log_modmail() and old_message.author.id == self.bot.user.id:

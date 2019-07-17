@@ -107,7 +107,7 @@ class Logger(commands.Cog):
     @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
     async def log_modmail(self, ctx):
         """
-        Toggle whether to log Modmail bot activities. Defaults yes.
+        Toggle whether to log Modmail bot activities. Defaults yes. Log-bot will override this config.
 
         Ie. threads channel created, help msgs edits, reply msgs, etc.
         """
@@ -128,6 +128,9 @@ class Logger(commands.Cog):
             await ctx.send('Logger will stop logging Modmail bot messages.')
 
     async def is_log_modmail(self):
+        if isinstance(self._log_bot, bool):
+            if not self._log_bot:
+                return False
         if isinstance(self._log_modmail, bool):
             return self._log_modmail
         config = await self.db.find_one({'_id': 'logger-config'})
@@ -532,6 +535,7 @@ class Logger(commands.Cog):
 
         if not new_content or (old_message and new_content == old_message.content):
             # Currently does not support Embed edits
+            return
             try:
                 message = await payload_channel.fetch_message(message_id)
 

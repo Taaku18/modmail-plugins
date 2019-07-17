@@ -48,9 +48,14 @@ class Logger(commands.Cog):
         self._channel = None
         self.last_audit_log = datetime.datetime.utcnow(), -1
 
-    @commands.command()
+    @commands.group()
     @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
-    async def lchannel(self, ctx, channel: TextChannel):
+    async def logger(self, ctx):
+        ...
+
+    @logger.command()
+    @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
+    async def channel(self, ctx, channel: TextChannel):
         """
         Sets the log channel.
         """
@@ -71,11 +76,9 @@ class Logger(commands.Cog):
             return self._channel
         logger.debug('Retrieving channel_id for logger from config.')
         config = await self.db.find_one({'_id': 'logger-config'})
-        if config is None:
-            raise ValueError(f'No logger channel specified, set one with `{self.bot.prefix}lchannel #channel`.')
-        channel_id = config.get('channel_id')
+        channel_id = (config or {}).get('channel_id')
         if channel_id is None:
-            raise ValueError(f'No logger channel specified, set one with `{self.bot.prefix}lchannel #channel`.')
+            raise ValueError(f'No logger channel specified, set one with `{self.bot.prefix}logger channel #channel`.')
         channel = self.bot.guild.get_channel(channel_id) or self.bot.modmail_guild.get_channel(channel_id)
         if channel is None:
             await self.db.find_one_and_update(
@@ -87,9 +90,9 @@ class Logger(commands.Cog):
         self._channel = channel
         return channel
 
-    @commands.command()
+    @logger.command(name='log-modmail')
     @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
-    async def lmodmail(self, ctx):
+    async def log_modmail(self, ctx):
         """
         Toggle whether to log Modmail bot activities. Defaults yes.
 
@@ -115,8 +118,8 @@ class Logger(commands.Cog):
         if isinstance(self._log_modmail, bool):
             return self._log_modmail
         config = await self.db.find_one({'_id': 'logger-config'})
-        if config is None or config.get('channel_id') is None:
-            raise ValueError(f'No logger channel specified, set one with `{self.bot.prefix}lchannel #channel`.')
+        if (config or {}).get('channel_id') is None:
+            raise ValueError(f'No logger channel specified, set one with `{self.bot.prefix}logger channel #channel`.')
         log_modmail = config.get('log_modmail')
         if not isinstance(log_modmail, bool):
             logger.debug('Setting log_modmail to True for the first time.')
@@ -125,26 +128,25 @@ class Logger(commands.Cog):
                 {'$set': {'log_modmail': True}},
                 upsert=True
             )
-            self._log_modmail = True
-            return True
+            log_modmail = True
         self._log_modmail = log_modmail
         return log_modmail
 
-    @commands.command()
+    @logger.command()
     @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
-    async def nolog(self, ctx, *, channel: typing.Union[TextChannel, CategoryChannel, int]):
+    async def whitelist(self, ctx, *, channel: typing.Union[TextChannel, int]):
         """
-        Toggle whether to log a channel or category.
+        Toggle whether to log a channel.
         """
         id = str(getattr(channel, 'id', channel))
         name = str(getattr(channel, 'mention', channel))
 
         config = await self.db.find_one({'_id': 'logger-config'})
         if config is None:
-            return await ctx.send(f'No logger channel specified, set one with `{self.bot.prefix}lchannel #channel`.')
+            return await ctx.send(f'No logger channel specified, '
+                                  f'set one with `{self.bot.prefix}logger channel #channel`.')
         blocked = config.get('no_log', [])
-        add = id not in blocked
-        if add:
+        if id not in blocked:
             blocked.append(id)
             await self.db.find_one_and_update(
                 {'_id': 'logger-config'},
@@ -161,26 +163,36 @@ class Logger(commands.Cog):
     async def is_logged(self, id):
         id = str(id)
         config = await self.db.find_one({'_id': 'logger-config'})
-        if config is None or config.get('channel_id') is None:
-            raise ValueError(f'No logger channel specified, set one with `{self.bot.prefix}lchannel #channel`.')
+        if (config or {}).get('channel_id') is None:
+            raise ValueError(f'No logger channel specified, '
+                             f'set one with `{self.bot.prefix}logger channel #channel`.')
         log_modmail = config.get('no_log', [])
         return id not in log_modmail
 
-    @loop_(seconds=5)
+    @loop_(seconds=10)
     async def audit_logs_logger(self):
-        channel = await self.get_log_channel()
+        try:
+            channel = await self.get_log_channel()
+        except ValueError as e:
+            logger.warning(str(e))
+            self.audit_logs_logger.cancel()
+            return
+
         audits = []
         async for audit in self.bot.guild.audit_logs(limit=30):
             if audit.created_at < self.last_audit_log[0] or audit.id == self.last_audit_log[1]:
                 break
-            if not await self.is_log_modmail() and audit.user.id == self.bot.user.id:
-                continue
+            try:
+                if not await self.is_log_modmail() and audit.user.id == self.bot.user.id:
+                    continue
+            except ValueError as e:
+                logger.warning(str(e))
+                self.audit_logs_logger.cancel()
+                return
             audits.append(audit)
 
         for audit in reversed(audits):
             if audit.action == AuditLogAction.channel_create:
-                if not await self.is_logged(audit.target.id):
-                    continue
                 name = escape_markdown(getattr(audit.target, 'name',
                                                getattr(audit.after, 'name', 'unknown-channel')))
                 if isinstance(audit.target, CategoryChannel):
@@ -210,8 +222,6 @@ class Logger(commands.Cog):
                         ))
 
             elif audit.action == AuditLogAction.channel_update:
-                if not await self.is_logged(audit.target.id):
-                    continue
                 name = escape_markdown(
                     getattr(audit.target, 'name',
                             getattr(audit.after, 'name', getattr(audit.before, 'name', 'unknown-channel'))))
@@ -335,7 +345,10 @@ class Logger(commands.Cog):
     async def on_raw_message_delete(self, payload):
         if payload.guild_id != self.bot.guild_id:
             return
-        if not await self.is_logged(payload.channel_id):
+        try:
+            if not await self.is_logged(payload.channel_id):
+                return
+        except ValueError:
             return
 
         channel = await self.get_log_channel()
@@ -384,7 +397,10 @@ class Logger(commands.Cog):
     async def on_raw_bulk_message_delete(self, payload):
         if payload.guild_id != self.bot.guild_id:
             return
-        if not await self.is_logged(payload.channel_id):
+        try:
+            if not await self.is_logged(payload.channel_id):
+                return
+        except ValueError:
             return
 
         channel = await self.get_log_channel()
@@ -438,7 +454,10 @@ class Logger(commands.Cog):
     @commands.Cog.listener()
     async def on_raw_message_edit(self, payload):
         channel_id = int(payload.data['channel_id'])
-        if not await self.is_logged(channel_id):
+        try:
+            if not await self.is_logged(channel_id):
+                return
+        except ValueError:
             return
 
         message_id = int(payload.data['id'])
@@ -531,22 +550,20 @@ class Logger(commands.Cog):
         ))
 
     def make_embed(self, title, description='', *, time=None, fields=None, footer=None):
-        embed = Embed(title=title, description=description, color=self.bot.main_color)
+        embed = Embed(title=title[:256], description=description[:2048], color=self.bot.main_color)
         embed.timestamp = time if time is not None else datetime.datetime.utcnow()
         if fields is not None:
             for n, v, i in fields:
-                n = str(n)
-                v = str(v)
+                n = str(n)[:256]
+                v = str(v)[:1024]
 
                 if not n or not v:
                     logger.info('Invalid form name/body: %s, %s', n, v)
                     continue
-                if len(n) > 256 or len(v) > 1024:
-                    logger.info('Name/body too long: %s, %s', n, v)
-                    continue
+
                 embed.add_field(name=n, value=v, inline=i)
         if footer is not None:
-            embed.set_footer(text=footer)
+            embed.set_footer(text=footer[:2048])
         return embed
 
 

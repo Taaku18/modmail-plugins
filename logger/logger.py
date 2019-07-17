@@ -299,14 +299,14 @@ class Logger(commands.Cog):
                 ))
 
             elif audit.action == AuditLogAction.message_delete:
-                if not await self.is_logged(audit.extra.channel.id):
+                if not await self.is_logged(getattr(getattr(audit.extra, 'channel', None), 'id', -1)):
                     continue
 
-                pl = '' if audit.extra.count == 1 else 's'
-                channel_text = getattr(audit.extra.channel, 'name', 'unknown-channel')
+                pl = '' if getattr(audit.extra, 'count', 1) == 1 else 's'
+                channel_text = getattr(getattr(audit.extra, 'channel', None), 'name', 'unknown-channel')
                 await channel.send(embed=self.make_embed(
                     f'Message{pl} Deleted',
-                    f'{audit.user.mention} deleted **{audit.extra.count}** message{pl} sent by '
+                    f'{audit.user.mention} deleted **{getattr(audit.extra, "count", "?")}** message{pl} sent by '
                     f'{audit.target.mention} from **#{channel_text}**.',
                     time=audit.created_at,
                     fields=[('Channel ID:', audit.target.id, True)]

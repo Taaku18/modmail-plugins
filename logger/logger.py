@@ -48,12 +48,12 @@ class Logger(commands.Cog):
         self._channel = None
         self.last_audit_log = datetime.datetime.utcnow(), -1
 
-    @commands.group()
+    @commands.group(name='logger')
     @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
-    async def logger(self, ctx):
+    async def logger_(self, ctx):
         ...
 
-    @logger.command()
+    @logger_.command()
     @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
     async def channel(self, ctx, channel: TextChannel):
         """
@@ -70,6 +70,10 @@ class Logger(commands.Cog):
             upsert=True
         )
         self._channel = channel
+
+        _task = self.audit_logs_logger.get_task()
+        if _task is None or _task.done():
+            self.audit_logs_logger.start()
 
     async def get_log_channel(self):
         if self._channel is not None:
@@ -90,7 +94,7 @@ class Logger(commands.Cog):
         self._channel = channel
         return channel
 
-    @logger.command(name='log-modmail')
+    @logger_.command(name='log-modmail')
     @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
     async def log_modmail(self, ctx):
         """
@@ -132,7 +136,7 @@ class Logger(commands.Cog):
         self._log_modmail = log_modmail
         return log_modmail
 
-    @logger.command()
+    @logger_.command()
     @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
     async def whitelist(self, ctx, *, channel: typing.Union[TextChannel, int]):
         """
@@ -348,10 +352,10 @@ class Logger(commands.Cog):
         try:
             if not await self.is_logged(payload.channel_id):
                 return
+            channel = await self.get_log_channel()
         except ValueError:
             return
 
-        channel = await self.get_log_channel()
         message = payload.cached_message
 
         if message:
@@ -400,10 +404,9 @@ class Logger(commands.Cog):
         try:
             if not await self.is_logged(payload.channel_id):
                 return
+            channel = await self.get_log_channel()
         except ValueError:
             return
-
-        channel = await self.get_log_channel()
 
         messages = sorted(payload.cached_messages, key=lambda msg: msg.created_at)
         message_ids = payload.message_ids
@@ -457,6 +460,7 @@ class Logger(commands.Cog):
         try:
             if not await self.is_logged(channel_id):
                 return
+            channel = await self.get_log_channel()
         except ValueError:
             return
 
@@ -476,7 +480,6 @@ class Logger(commands.Cog):
             return
 
         channel_text = payload_channel.name
-        channel = await self.get_log_channel()
 
         if old_message:
             if not await self.is_log_modmail() and old_message.author.id == self.bot.user.id:
@@ -533,7 +536,10 @@ class Logger(commands.Cog):
     async def on_member_join(self, member):
         if member.guild.id != self.bot.guild_id:
             return
-        channel = await self.get_log_channel()
+        try:
+            channel = await self.get_log_channel()
+        except ValueError:
+            return
         await channel.send(embed=self.make_embed(
             'Member Joined',
             f'{member.mention} has joined.'
@@ -543,7 +549,10 @@ class Logger(commands.Cog):
     async def on_member_remove(self, member):
         if member.guild.id != self.bot.guild_id:
             return
-        channel = await self.get_log_channel()
+        try:
+            channel = await self.get_log_channel()
+        except ValueError:
+            return
         await channel.send(embed=self.make_embed(
             'Member Left',
             f'{member.mention} has left.'
@@ -553,7 +562,7 @@ class Logger(commands.Cog):
         embed = Embed(title=title[:256], description=description[:2048], color=self.bot.main_color)
         embed.timestamp = time if time is not None else datetime.datetime.utcnow()
         if fields is not None:
-            for n, v, i in fields:
+            for n, v, i in fields[:25]:
                 n = str(n)[:256]
                 v = str(v)[:1024]
 

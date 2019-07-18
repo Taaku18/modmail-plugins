@@ -94,11 +94,7 @@ class Logger(commands.Cog):
             raise ValueError(f'No logger channel specified, set one with `{self.bot.prefix}logger channel #channel`.')
         channel = self.bot.guild.get_channel(channel_id) or self.bot.modmail_guild.get_channel(channel_id)
         if channel is None:
-            await self.db.find_one_and_update(
-                {'_id': 'logger-config'},
-                {'$set': {'channel_id': None}},
-                upsert=True
-            )
+            logger.error('Logger channel with ID `%s` not found.', channel_id)
             raise ValueError(f'Logger channel with ID `{channel_id}` not found.')
         self._channel = channel
         return channel
@@ -407,19 +403,21 @@ class Logger(commands.Cog):
             if not await self.is_logged(payload.channel_id):
                 return
             channel = await self.get_log_channel()
+            logging_bot = await self.is_log_bot()
+            logging_modmail = await self.is_logging_modmail()
         except ValueError:
             return
 
         message = payload.cached_message
 
         if message:
-            if not await self.is_log_modmail():
+            if not logging_modmail:
                 if message.author.id == self.bot.user.id:
                     return
                 elif await self.bot.db.logs.count_documents(
                         {"messages.message_id": str(payload.message_id), "messages.type": "thread_message"}, limit=1):
                     return
-            if not await self.is_log_bot() and message.author.bot:
+            if not logging_bot and message.author.bot:
                 return
 
             try:
@@ -437,7 +435,7 @@ class Logger(commands.Cog):
                         ('Message sent on:', f'[{time}](https://time.is/{md_time}?Message_Deleted)', True)],
                 footer='A further message may follow if this message was not deleted by the author.'
             ))
-        if (not await self.is_log_modmail() or not await self.is_log_bot()) and await self.bot.db.logs.count_documents(
+        if (not logging_modmail or not logging_bot) and await self.bot.db.logs.count_documents(
                 {"messages.message_id": str(payload.message_id), "messages.type": "thread_message"}, limit=1):
             return
         payload_channel = self.bot.guild.get_channel(payload.channel_id)

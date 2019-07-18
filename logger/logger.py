@@ -404,7 +404,7 @@ class Logger(commands.Cog):
                 return
             channel = await self.get_log_channel()
             logging_bot = await self.is_log_bot()
-            logging_modmail = await self.is_logging_modmail()
+            logging_modmail = await self.is_log_modmail()
         except ValueError:
             return
 

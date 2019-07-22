@@ -230,13 +230,13 @@ class Report(commands.Cog):
         await reaction.message.unpin()
         await reaction.message.clear_reactions()
         channel = reaction.message.channel
-        if not approved:
-            return await channel.send(f'Admin {user.name} has denied your issue.')
-        await channel.send(f'Admin {user.name} has approved your issue.')
 
         author = channel.guild.get_member(entry['user_id'])
-        if author is not None:
-            await channel.send(author.mention)
+        user_mention = f'<@!{entry["user_id"]}>' if author is None else f'{author.mention}'
+
+        if not approved:
+            return await channel.send(f'{user_mention} {user.name} has denied your issue.')
+        await channel.send(f'{user_mention} {user.name} has approved your issue.')
 
         async with self.bot.session.post(entry['url'], headers=self.headers, json=entry['data']) as resp:
             try:

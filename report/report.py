@@ -203,6 +203,8 @@ class Report(commands.Cog):
 
     @commands.Cog.listener()
     async def on_reaction_add(self, reaction, user):
+        if user == self.bot.user:
+            return
         pending = await self.pending_approval()
         approved = None
         entry = None
@@ -223,21 +225,22 @@ class Report(commands.Cog):
             return
         await reaction.message.unpin()
         await reaction.message.clear_reactions()
+        channel = reaction.message.channel
         if not approved:
-            return await reaction.channel.send(f'Admin {user.name} has denied your issue.')
-        await reaction.channel.send(f'Admin {user.name} has approved your issue.')
+            return await channel.send(f'Admin {user.name} has denied your issue.')
+        await channel.send(f'Admin {user.name} has approved your issue.')
 
         async with self.bot.session.post(entry['url'], headers=self.headers, json=entry['data']) as resp:
             try:
                 content = await resp.json()
             except (json.JSONDecodeError, aiohttp.ContentTypeError):
                 content = await resp.text()
-                return await reaction.channel.send(f'Failed to create issue: ```\n{content}\n```')
+                return await channel.send(f'Failed to create issue: ```\n{content}\n```')
             if resp.status == 410:
-                return await reaction.channel.send(f'This GitHub repo is not accepting new issues: ```\n{content}\n```')
+                return await channel.send(f'This GitHub repo is not accepting new issues: ```\n{content}\n```')
             if resp.status != 201:
-                return await reaction.channel.send(f'Failed to create issue, status {resp.status}: ```\n{content}\n```')
-            await reaction.channel.send(f'Successfully created issue: {content["html_url"]}.')
+                return await channel.send(f'Failed to create issue, status {resp.status}: ```\n{content}\n```')
+            await channel.send(f'Successfully created issue: {content["html_url"]}.')
 
     @commands.Cog.listener()
     async def on_reaction_remove(self, reaction, user):

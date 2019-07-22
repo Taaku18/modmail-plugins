@@ -145,21 +145,20 @@ class Report(commands.Cog):
 
         waiting_msg = await ctx.send('Issue noted, requires a bot Administrator\'s approval (within an hour).')
         await waiting_msg.pin()
-        await waiting_msg.add_reaction('👍')
-        await waiting_msg.add_reaction('👎')
+        await waiting_msg.add_reaction('\N{THUMBS UP SIGN}')
+        await waiting_msg.add_reaction('\N{THUMBS DOWN SIGN}')
         admin = None
 
         def reaction_wait(reaction, user):
             nonlocal admin
-            await reaction.remove(user)
             if reaction.message == waiting_msg:
-                if str(reaction.emoji) in {'👍', '👎'}:
+                if str(reaction.emoji) in {'\N{THUMBS UP SIGN}', '\N{THUMBS DOWN SIGN}'}:
                     temp_ctx = SimpleNamespace(bot=ctx.bot, author=user, channel=ctx.channel)
                     if checks.check_permissions(temp_ctx, None, PermissionLevel.ADMINISTRATOR):
                         admin = user
-                        if str(reaction.emoji) == '👍':
+                        if str(reaction.emoji) == '\N{THUMBS UP SIGN}':
                             return True
-                        elif str(reaction.emoji) == '👎':
+                        elif str(reaction.emoji) == '\N{THUMBS DOWN SIGN}':
                             raise ValueError
             return False
 

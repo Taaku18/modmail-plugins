@@ -118,7 +118,7 @@ class Report(commands.Cog):
         desc += f'\n\nIssue created by @{ctx.author.name}#{ctx.author.discriminator}, Discord user ID: {ctx.author.id}.'
 
         await ctx.send('Specify the GitHub repo for the issue to be posted in, type "modmail" for "kyb3r/modmail" '
-                       '(format: "owner/repo"):')
+                       '(format: "owner/repo" or "https://github.com/owner/repo"):')
 
         try:
             msg = await self.bot.wait_for('message', check=message_wait, timeout=900.0)
@@ -131,7 +131,7 @@ class Report(commands.Cog):
         if msg.lower() == 'modmail':
             url += 'kyb3r/modmail/'
         else:
-            match = re.match(r'^/?([a-zA-Z0-9\-]+/[a-zA-Z0-9\-]+)/?$', msg)
+            match = re.match(r'^(?:(?:https?://)?github\.com/|/)?([a-zA-Z0-9\-]+/[a-zA-Z0-9\-]+)/?$', msg)
             if match is None:
                 return await ctx.send('Invalid GitHub repo, specify in the format "owner/repo".')
             url += match.group(1) + '/'

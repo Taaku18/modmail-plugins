@@ -198,7 +198,11 @@ class Report(commands.Cog):
         end_time = datetime.utcnow() + timedelta(hours=12)
 
         await self.pending_approval(setting={
-            'msg_id': waiting_msg.id, 'end_time': end_time.isoformat(), 'data': data, 'url': url
+            'msg_id': waiting_msg.id,
+            'user_id': ctx.author.id,
+            'end_time': end_time.isoformat(),
+            'data': data,
+            'url': url
         })
 
     @commands.Cog.listener()
@@ -230,6 +234,10 @@ class Report(commands.Cog):
             return await channel.send(f'Admin {user.name} has denied your issue.')
         await channel.send(f'Admin {user.name} has approved your issue.')
 
+        author = channel.guild.get_member(entry['user_id'])
+        if author is not None:
+            await channel.send(author.mention)
+
         async with self.bot.session.post(entry['url'], headers=self.headers, json=entry['data']) as resp:
             try:
                 content = await resp.json()
@@ -248,6 +256,13 @@ class Report(commands.Cog):
         for entry in pending:
             if entry['msg_id'] == reaction.message.id and user == self.bot.user:
                 return await reaction.message.add_reaction(reaction)
+
+    @commands.Cog.listener()
+    async def on_raw_message_delete(self, payload):
+        pending = await self.pending_approval()
+        for entry in pending:
+            if payload.message_id == entry['msg_id']:
+                return await self.pending_approval(popping=entry)
 
 
 def setup(bot):

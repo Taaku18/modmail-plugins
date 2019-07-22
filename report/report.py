@@ -178,7 +178,7 @@ class Report(commands.Cog):
         if msg.content.strip('` \n\t\r').lower() == 'modmail':
             url += 'kyb3r/modmail/'
         else:
-            match = re.match(r'^(?:(?:https?://)?github\.com/|/)?([a-zA-Z0-9\-]+/[a-zA-Z0-9\-]+)/?$',
+            match = re.match(r'^<?(?:(?:https?://)?github\.com/|/)?([a-zA-Z0-9\-]+/[a-zA-Z0-9\-]+)/?>?$',
                              msg.content.strip('` \n\t\r'))
             if match is None:
                 return await ctx.send('Invalid GitHub repo, specify in the format `owner/repo`.')
@@ -221,7 +221,7 @@ class Report(commands.Cog):
             await self.pending_approval(popping=entry)
             await reaction.remove(user)
 
-        if approved:
+        if approved is None:
             return
         await reaction.message.unpin()
         await reaction.message.clear_reactions()

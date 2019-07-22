@@ -81,7 +81,7 @@ class Report(commands.Cog):
         def message_wait(m):
             if m.content.lower() == ':cancel':
                 raise ValueError
-            return m.author == ctx.author.id
+            return m.author == ctx.author
 
         title = ''
         labels = []
@@ -95,8 +95,8 @@ class Report(commands.Cog):
             title = '[CONFIG SUGGESTION] '
             labels.append('config-suggestion')
 
-        await ctx.send('We will now start the composing the issue, type `:cancel` any time to stop.\n'
-                       'Please type the title of your report (within 15 minutes):')
+        await ctx.send('We will now start the composing the issue, type `:cancel` any time to stop.\n\n'
+                       'Please type the **title** of your report (within 15 minutes):')
 
         try:
             msg = await self.bot.wait_for('message', check=message_wait, timeout=900.0)

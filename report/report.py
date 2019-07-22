@@ -46,7 +46,7 @@ class Report(commands.Cog):
 
     @commands.command()
     @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
-    def token(self, *, access_token: str):
+    async def token(self, *, access_token: str):
         """
         Set the GitHub access token.
         """

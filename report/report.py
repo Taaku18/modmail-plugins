@@ -2,11 +2,13 @@ import asyncio
 import enum
 import json
 import re
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 
 from discord.ext import commands
 
 import aiohttp
+from pymongo import ReturnDocument
 
 from core import checks
 from core.models import PermissionLevel
@@ -38,11 +40,55 @@ class Report(commands.Cog):
         self.bot: commands.Bot = bot
         self.db = bot.plugin_db.get_partition(self)
         self.access_token = ''
+        self._pending_approval = None
 
     @property
     def headers(self):
         return {"Authorization": "token " + self.access_token,
                 "Accept": "application/json"}
+
+    async def pending_approval(self, *, setting=None, popping=None):
+        if setting is not None:
+            config = await self.db.find_one_and_update(
+                {'_id': 'report-config'},
+                {'$push': {'pending_approval': setting}},
+                upsert=True,
+                return_document=ReturnDocument.AFTER
+            )
+            self._pending_approval = config['pending_approval']
+
+        if popping is not None:
+            if isinstance(popping, (list, tuple)):
+                popping = [str(i) for i in popping]
+            else:
+                popping = str(popping)
+            config = await self.db.find_one_and_update(
+                {'_id': 'report-config'},
+                {'$pull': {'pending_approval': popping}},
+                upsert=True,
+                return_document=ReturnDocument.AFTER
+            )
+            self._pending_approval = config['pending_approval']
+
+        if self._pending_approval is None:
+            config = await self.db.find_one({'_id': 'report-config'})
+            self._pending_approval = (config or {}).get('pending_approval', [])
+
+        now = datetime.utcnow()
+        pending = []
+        dismissed = 0
+
+        for entry in self._pending_approval:
+            if datetime.fromisoformat(entry['end_time']) >= now:
+                pending.append(entry)
+            else:
+                dismissed += 1
+        if dismissed:
+            await self.db.update_one(
+                {'_id': 'report-config'}, {'$set': {'pending_approval': pending}}
+            )
+
+        return self._pending_approval
 
     @commands.command()
     @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
@@ -104,9 +150,9 @@ class Report(commands.Cog):
             return await ctx.send('Cancelled.')
         except asyncio.TimeoutError:
             return await ctx.send('Timed out, you will need to restart.')
-        title += msg.content
+        title += msg.content.strip('` \n\t\r')
 
-        await ctx.send('Please type the message of your report (within 15 minutes):')
+        await ctx.send('Please type the **message** of your report (within 15 minutes):')
 
         try:
             msg = await self.bot.wait_for('message', check=message_wait, timeout=900.0)
@@ -115,11 +161,11 @@ class Report(commands.Cog):
         except asyncio.TimeoutError:
             return await ctx.send('Timed out, try again.')
 
-        desc = msg.content
+        desc = msg.content.strip('` \n\t\r')
         desc += f'\n\nIssue created by @{ctx.author.name}#{ctx.author.discriminator}, Discord user ID: {ctx.author.id}.'
 
-        await ctx.send('Specify the GitHub repo for the issue to be posted in, type "modmail" for "kyb3r/modmail" '
-                       '(format: "owner/repo" or "https://github.com/owner/repo"):')
+        await ctx.send('Specify the **GitHub Repo** for the issue to be posted in, type "modmail" for `kyb3r/modmail` '
+                       '(format: `owner/repo` or `https://github.com/owner/repo/`):')
 
         try:
             msg = await self.bot.wait_for('message', check=message_wait, timeout=900.0)
@@ -129,12 +175,13 @@ class Report(commands.Cog):
             return await ctx.send(f'Timed out, you will need to restart.')
 
         url = 'https://api.github.com/repos/'
-        if msg.lower() == 'modmail':
+        if msg.content.strip('` \n\t\r').lower() == 'modmail':
             url += 'kyb3r/modmail/'
         else:
-            match = re.match(r'^(?:(?:https?://)?github\.com/|/)?([a-zA-Z0-9\-]+/[a-zA-Z0-9\-]+)/?$', msg)
+            match = re.match(r'^(?:(?:https?://)?github\.com/|/)?([a-zA-Z0-9\-]+/[a-zA-Z0-9\-]+)/?$',
+                             msg.content.strip('` \n\t\r'))
             if match is None:
-                return await ctx.send('Invalid GitHub repo, specify in the format "owner/repo".')
+                return await ctx.send('Invalid GitHub repo, specify in the format `owner/repo`.')
             url += match.group(1) + '/'
         url += 'issues'
 
@@ -144,48 +191,60 @@ class Report(commands.Cog):
             'labels': labels,
         }
 
-        waiting_msg = await ctx.send('Issue noted, requires a bot Administrator\'s approval (within an hour).')
+        waiting_msg = await ctx.send('Issue noted, requires a bot Administrator\'s approval (within 12 hours).')
         await waiting_msg.pin()
         await waiting_msg.add_reaction('\N{THUMBS UP SIGN}')
         await waiting_msg.add_reaction('\N{THUMBS DOWN SIGN}')
-        admin = None
+        end_time = datetime.utcnow() + timedelta(hours=12)
 
-        def reaction_wait(reaction, user):
-            nonlocal admin
-            if reaction.message == waiting_msg:
-                if str(reaction.emoji) in {'\N{THUMBS UP SIGN}', '\N{THUMBS DOWN SIGN}'}:
-                    temp_ctx = SimpleNamespace(bot=ctx.bot, author=user, channel=ctx.channel)
-                    if checks.check_permissions(temp_ctx, None, PermissionLevel.ADMINISTRATOR):
-                        admin = user
-                        if str(reaction.emoji) == '\N{THUMBS UP SIGN}':
-                            return True
-                        elif str(reaction.emoji) == '\N{THUMBS DOWN SIGN}':
-                            raise ValueError
-            return False
+        await self.pending_approval(setting={
+            'msg_id': waiting_msg.id, 'end_time': end_time.isoformat(), 'data': data, 'url': url
+        })
 
-        try:
-            await self.bot.wait_for('reaction_add', check=reaction_wait, timeout=3600.0)
-        except ValueError:
-            return await ctx.send(f'Admin {admin.name if admin is not None else "unknown"} has denied your issue.')
-        except asyncio.TimeoutError:
-            return await ctx.send(f'Timed out, you will need to restart.')
-        finally:
-            await waiting_msg.unpin()
-            await waiting_msg.clear_reactions()
+    @commands.Cog.listener()
+    async def on_reaction_add(self, reaction, user):
+        pending = await self.pending_approval()
+        approved = None
+        entry = None
+        for entry in pending:
+            if entry['msg_id'] != reaction.message.id:
+                continue
+            if reaction.emoji in {'\N{THUMBS UP SIGN}', '\N{THUMBS DOWN SIGN}'}:
+                temp_ctx = SimpleNamespace(bot=self.bot, author=user, channel=reaction.message.channel)
+                if await checks.check_permissions(temp_ctx, None, PermissionLevel.ADMINISTRATOR):
+                    if str(reaction.emoji) == '\N{THUMBS UP SIGN}':
+                        approved = True
+                    elif str(reaction.emoji) == '\N{THUMBS DOWN SIGN}':
+                        approved = False
+            await self.pending_approval(popping=entry)
+            await reaction.remove(user)
 
-        await ctx.send(f'Admin {admin.name if admin is not None else "unknown"} has approved your issue.')
+        if approved:
+            return
+        await reaction.message.unpin()
+        await reaction.message.clear_reactions()
+        if not approved:
+            return await reaction.channel.send(f'Admin {user.name} has denied your issue.')
+        await reaction.channel.send(f'Admin {user.name} has approved your issue.')
 
-        async with self.bot.session.post(url, headers=self.headers, json=data) as resp:
+        async with self.bot.session.post(entry['url'], headers=self.headers, json=entry['data']) as resp:
             try:
                 content = await resp.json()
             except (json.JSONDecodeError, aiohttp.ContentTypeError):
                 content = await resp.text()
-                return await ctx.send(f'Failed to create issue: ```\n{content}\n```')
+                return await reaction.channel.send(f'Failed to create issue: ```\n{content}\n```')
             if resp.status == 410:
-                return await ctx.send(f'This GitHub repo is not accepting new issues: ```\n{content}\n```')
+                return await reaction.channel.send(f'This GitHub repo is not accepting new issues: ```\n{content}\n```')
             if resp.status != 201:
-                return await ctx.send(f'Failed to create issue, status {resp.status}: ```\n{content}\n```')
-            await ctx.send(f'Successfully created issue: {content["html_url"]}.')
+                return await reaction.channel.send(f'Failed to create issue, status {resp.status}: ```\n{content}\n```')
+            await reaction.channel.send(f'Successfully created issue: {content["html_url"]}.')
+
+    @commands.Cog.listener()
+    async def on_reaction_remove(self, reaction, user):
+        pending = await self.pending_approval()
+        for entry in pending:
+            if entry['msg_id'] == reaction.message.id and user == self.bot.user:
+                return await reaction.message.add_reaction(reaction)
 
 
 def setup(bot):

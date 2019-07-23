@@ -2,9 +2,11 @@ import asyncio
 import enum
 import json
 import re
+import typing
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 
+from discord import TextChannel
 from discord.ext import commands
 
 import aiohttp
@@ -41,6 +43,7 @@ class Report(commands.Cog):
         self.db = bot.plugin_db.get_partition(self)
         self.access_token = ''
         self._pending_approval = None
+        self._allowed = None
 
     @property
     def headers(self):
@@ -90,6 +93,58 @@ class Report(commands.Cog):
 
         return self._pending_approval
 
+    async def allowed(self, channel_id):
+        if self._allowed is None:
+            config = await self.db.find_one({'_id': 'report-config'})
+            self._allowed = (config or {}).get('allowed_channels', [])
+        return channel_id in self._allowed or not self._allowed
+
+    @commands.command()
+    @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
+    async def allow(self, ctx, *, channel: typing.Union[TextChannel, int] = None):
+        """
+        Add or remove a channel's ability to create issues.
+
+        If no channels are specified, all channels are all allowed.
+        """
+        if channel is None:
+            config = await self.db.find_one({'_id': 'report-config'})
+            self._allowed = (config or {}).get('allowed_channels', [])
+            if not self._allowed:
+                return await ctx.send('All channels are allowed to create issues.')
+
+            channel_names = []
+            for id_ in self._allowed:
+                ch = ctx.guild.get_channel(id_)
+                if ch is not None:
+                    channel_names.append(ch.mention)
+                else:
+                    channel_names.append(str(id_))
+            return await ctx.send('These are the channel(s) that are allowed to '
+                                  f'create issues: {", ".join(channel_names)}.')
+
+        id_ = getattr(channel, 'id', channel)
+        if await self.allowed(id_):
+            config = await self.db.find_one_and_update(
+                {'_id': 'report-config'},
+                {'$pull': {'allowed_channels': id_}},
+                upsert=True,
+                return_document=ReturnDocument.AFTER
+            )
+            await ctx.send('Successfully disallowed the channel; '
+                           f'however, if no channels are set with `{self.bot.prefix}allow`, '
+                           f'all channels will be allowed.')
+        else:
+            config = await self.db.find_one_and_update(
+                {'_id': 'report-config'},
+                {'$push': {'allowed_channels': id_}},
+                upsert=True,
+                return_document=ReturnDocument.AFTER
+            )
+            await ctx.send('Successfully allowed the channel.')
+
+        self._allowed = config['allowed_channels']
+
     @commands.command()
     @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
     async def token(self, ctx, *, access_token: str):
@@ -123,6 +178,9 @@ class Report(commands.Cog):
             if not access_token:
                 return await ctx.send(f'No access token found, set one with `{self.bot.prefix}token accesstoken`.')
             self.access_token = access_token
+
+        if not self.allowed(ctx.channel.id):
+            return await ctx.send('You\'re not allowed to create reports in this channel.')
 
         def message_wait(m):
             if m.content.lower() == ':cancel':
@@ -162,7 +220,7 @@ class Report(commands.Cog):
             return await ctx.send('Timed out, try again.')
 
         desc = msg.content.strip('` \n\t\r')
-        desc += f'\n\nIssue created by @{ctx.author.name}#{ctx.author.discriminator}, Discord user ID: {ctx.author.id}.'
+        desc += f'\n\n\nIssue created by `@{ctx.author.name}#{ctx.author.discriminator}`, Discord ID: {ctx.author.id}.'
 
         await ctx.send('Specify the **GitHub Repo** for the issue to be posted in, type "modmail" for `kyb3r/modmail` '
                        '(format: `owner/repo` or `https://github.com/owner/repo/`):')

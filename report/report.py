@@ -189,7 +189,7 @@ class Report(commands.Cog):
         self.in_progress.append((ctx.author.id, ctx.channel.id))
 
         def message_wait(m):
-            if m.content.lower() == ':cancel':
+            if m.author == ctx.author and m.content.lower() == ':cancel':
                 raise ValueError
             return m.author == ctx.author
 

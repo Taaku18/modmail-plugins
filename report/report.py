@@ -280,12 +280,13 @@ class Report(commands.Cog):
         channel = self.bot.get_channel(payload.channel_id)
         if channel is None:
             return
+        user = channel.guild.get_member(payload.user_id)
+        if user is None:
+            return
+
         try:
             message = await channel.fetch_message(payload.message_id)
         except NotFound:
-            return
-        user = channel.guild.get_member(payload.user_id)
-        if user is None:
             return
 
         for entry in pending:
@@ -312,6 +313,13 @@ class Report(commands.Cog):
         if not approved:
             return await channel.send(f'{user_mention} {user.name} has denied your issue.')
         await channel.send(f'{user_mention} {user.name} has approved your issue.')
+
+        if not self.access_token:
+            config = await self.db.find_one({'_id': 'report-config'})
+            access_token = (config or {}).get('access_token', '')
+            if not access_token:
+                return await channel.send(f'No access token found, set one with `{self.bot.prefix}token accesstoken`.')
+            self.access_token = access_token
 
         async with self.bot.session.post(entry['url'], headers=self.headers, json=entry['data']) as resp:
             try:

@@ -227,7 +227,7 @@ class Report(commands.Cog):
 
         desc = msg.content.strip('` \n\t\r')
         desc += f'\n\n\nIssue created by `@{ctx.author.name}#{ctx.author.discriminator}`, ' \
-            f'Discord ID: `{ctx.author.id}``.'
+            f'Discord ID: `{ctx.author.id}`.'
 
         await ctx.send('Specify the **GitHub Repo** for the issue to be posted in, type "modmail" for `kyb3r/modmail` '
                        '(format: `owner/repo` or `https://github.com/owner/repo/`):')

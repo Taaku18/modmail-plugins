@@ -20,6 +20,7 @@ class IssueType(enum.Enum):
     BUG = 'bug'
     FEATURE = 'feature'
     CONFIG = 'config'
+    NONE = 'none'
 
     @classmethod
     def replace(cls, item):
@@ -162,7 +163,7 @@ class Report(commands.Cog):
 
     @commands.command()
     @checks.has_permissions(PermissionLevel.REGULAR)
-    async def report(self, ctx, *, issue_type: str.lower = 'bug'):
+    async def report(self, ctx, *, issue_type: str.lower = 'none'):
         """
         Interactively report a bug or feature request in GitHub.
 
@@ -225,7 +226,8 @@ class Report(commands.Cog):
             return await ctx.send('Timed out, try again.')
 
         desc = msg.content.strip('` \n\t\r')
-        desc += f'\n\n\nIssue created by `@{ctx.author.name}#{ctx.author.discriminator}`, Discord ID: {ctx.author.id}.'
+        desc += f'\n\n\nIssue created by `@{ctx.author.name}#{ctx.author.discriminator}`, ' \
+            f'Discord ID: `{ctx.author.id}``.'
 
         await ctx.send('Specify the **GitHub Repo** for the issue to be posted in, type "modmail" for `kyb3r/modmail` '
                        '(format: `owner/repo` or `https://github.com/owner/repo/`):')

@@ -44,6 +44,7 @@ class Report(commands.Cog):
         self.access_token = ''
         self._pending_approval = None
         self._allowed = None
+        self.in_progress = []
 
     @property
     def headers(self):
@@ -182,6 +183,10 @@ class Report(commands.Cog):
         if not self.allowed(ctx.channel.id):
             return await ctx.send('You\'re not allowed to create reports in this channel.')
 
+        if (ctx.author.id, ctx.channel.id) in self.in_progress:
+            return
+        self.in_progress.append((ctx.author.id, ctx.channel.id))
+
         def message_wait(m):
             if m.content.lower() == ':cancel':
                 raise ValueError
@@ -262,6 +267,8 @@ class Report(commands.Cog):
             'data': data,
             'url': url
         })
+
+        self.in_progress.remove((ctx.author.id, ctx.channel.id))
 
     @commands.Cog.listener()
     async def on_reaction_add(self, reaction, user):

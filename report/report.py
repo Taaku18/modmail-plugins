@@ -125,7 +125,11 @@ class Report(commands.Cog):
                                   f'create issues: {", ".join(channel_names)}.')
 
         id_ = getattr(channel, 'id', channel)
-        if await self.allowed(id_):
+        if self._allowed is None:
+            config = await self.db.find_one({'_id': 'report-config'})
+            self._allowed = (config or {}).get('allowed_channels', [])
+
+        if id_ in self.allowed:
             config = await self.db.find_one_and_update(
                 {'_id': 'report-config'},
                 {'$pull': {'allowed_channels': id_}},

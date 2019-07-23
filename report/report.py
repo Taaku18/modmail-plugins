@@ -136,9 +136,9 @@ class Report(commands.Cog):
                 upsert=True,
                 return_document=ReturnDocument.AFTER
             )
-            await ctx.send('Successfully disallowed the channel; '
+            await ctx.send(f'Successfully disallowed {getattr(channel, "mention", channel)}; '
                            f'however, if no channels are set with `{self.bot.prefix}allow`, '
-                           f'all channels will be allowed.')
+                           'all channels will be allowed.')
         else:
             config = await self.db.find_one_and_update(
                 {'_id': 'report-config'},
@@ -146,7 +146,7 @@ class Report(commands.Cog):
                 upsert=True,
                 return_document=ReturnDocument.AFTER
             )
-            await ctx.send('Successfully allowed the channel.')
+            await ctx.send(f'Successfully allowed {getattr(channel, "mention", channel)}.')
 
         self._allowed = config['allowed_channels']
 
@@ -184,7 +184,7 @@ class Report(commands.Cog):
                 return await ctx.send(f'No access token found, set one with `{self.bot.prefix}token accesstoken`.')
             self.access_token = access_token
 
-        if not self.allowed(ctx.channel.id):
+        if not await self.allowed(ctx.channel.id):
             return await ctx.send('You\'re not allowed to create reports in this channel.')
 
         if (ctx.author.id, ctx.channel.id) in self.in_progress:

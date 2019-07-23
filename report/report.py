@@ -6,7 +6,7 @@ import typing
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 
-from discord import TextChannel
+from discord import TextChannel, NotFound
 from discord.ext import commands
 
 import aiohttp
@@ -271,30 +271,40 @@ class Report(commands.Cog):
         self.in_progress.remove((ctx.author.id, ctx.channel.id))
 
     @commands.Cog.listener()
-    async def on_reaction_add(self, reaction, user):
-        if user == self.bot.user:
+    async def on_raw_reaction_add(self, payload):
+        if payload.user_id == self.bot.user.id:
             return
         pending = await self.pending_approval()
         approved = None
         entry = None
+        channel = self.bot.get_channel(payload.channel_id)
+        if channel is None:
+            return
+        try:
+            message = await channel.fetch_message(payload.message_id)
+        except NotFound:
+            return
+        user = channel.guild.get_member(payload.user_id)
+        if user is None:
+            return
+
         for entry in pending:
-            if entry['msg_id'] != reaction.message.id:
+            if entry['msg_id'] != payload.message_id:
                 continue
-            if reaction.emoji in {'\N{THUMBS UP SIGN}', '\N{THUMBS DOWN SIGN}'}:
-                temp_ctx = SimpleNamespace(bot=self.bot, author=user, channel=reaction.message.channel)
+            if str(payload.emoji) in {'\N{THUMBS UP SIGN}', '\N{THUMBS DOWN SIGN}'}:
+                temp_ctx = SimpleNamespace(bot=self.bot, author=user, channel=channel)
                 if await checks.check_permissions(temp_ctx, None, PermissionLevel.ADMINISTRATOR):
-                    if str(reaction.emoji) == '\N{THUMBS UP SIGN}':
+                    if str(payload.emoji) == '\N{THUMBS UP SIGN}':
                         approved = True
-                    elif str(reaction.emoji) == '\N{THUMBS DOWN SIGN}':
+                    elif str(payload.emoji) == '\N{THUMBS DOWN SIGN}':
                         approved = False
             await self.pending_approval(popping=entry)
-            await reaction.remove(user)
+            await message.remove_reaction(payload.emoji, user)
 
         if approved is None:
             return
-        await reaction.message.unpin()
-        await reaction.message.clear_reactions()
-        channel = reaction.message.channel
+        await message.unpin()
+        await message.clear_reactions()
 
         author = channel.guild.get_member(entry['user_id'])
         user_mention = f'<@!{entry["user_id"]}>' if author is None else f'{author.mention}'
@@ -316,11 +326,18 @@ class Report(commands.Cog):
             await channel.send(f'Successfully created issue: {content["html_url"]}.')
 
     @commands.Cog.listener()
-    async def on_reaction_remove(self, reaction, user):
+    async def on_raw_reaction_remove(self, payload):
         pending = await self.pending_approval()
         for entry in pending:
-            if entry['msg_id'] == reaction.message.id and user == self.bot.user:
-                return await reaction.message.add_reaction(reaction)
+            if entry['msg_id'] == payload.message_id and payload.user_id == self.bot.user.id:
+                channel = self.bot.get_channel(payload.channel_id)
+                if channel is None:
+                    return
+                try:
+                    message = await channel.fetch_message(payload.message_id)
+                except NotFound:
+                    return
+                return await message.add_reaction(payload.emoji)
 
     @commands.Cog.listener()
     async def on_raw_message_delete(self, payload):

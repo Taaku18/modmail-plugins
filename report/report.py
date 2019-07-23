@@ -129,7 +129,7 @@ class Report(commands.Cog):
             config = await self.db.find_one({'_id': 'report-config'})
             self._allowed = (config or {}).get('allowed_channels', [])
 
-        if id_ in self.allowed:
+        if id_ in self._allowed:
             config = await self.db.find_one_and_update(
                 {'_id': 'report-config'},
                 {'$pull': {'allowed_channels': id_}},

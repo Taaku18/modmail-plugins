@@ -62,13 +62,9 @@ class Report(commands.Cog):
             self._pending_approval = config['pending_approval']
 
         if popping is not None:
-            if isinstance(popping, (list, tuple)):
-                popping = [str(i) for i in popping]
-            else:
-                popping = str(popping)
             config = await self.db.find_one_and_update(
                 {'_id': 'report-config'},
-                {'$pull': {'pending_approval': popping}},
+                {'$pull': {'pending_approval': {'msg_id': popping['msg_id']}}},
                 upsert=True,
                 return_document=ReturnDocument.AFTER
             )

@@ -214,7 +214,7 @@ class Report(commands.Cog):
             return await ctx.send('Cancelled.')
         except asyncio.TimeoutError:
             return await ctx.send('Timed out, you will need to restart.')
-        title += msg.content.strip('` \n\t\r')
+        title += msg.content.strip('` \n\t\r').title()
 
         await ctx.send('Please type the **message** of your report (within 15 minutes):')
 

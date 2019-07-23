@@ -19,7 +19,7 @@ from core.models import PermissionLevel
 class IssueType(enum.Enum):
     BUG = 'bug'
     FEATURE = 'feature'
-    CONFIG = 'config'
+    CONFIG = 'customize'
     NONE = 'none'
 
     @classmethod
@@ -29,7 +29,7 @@ class IssueType(enum.Enum):
             return cls.BUG
         if item in {'feature request', 'new feature'}:
             return cls.FEATURE
-        if item in {'config suggestion', 'new config'}:
+        if item in {'config', 'config suggestion', 'new config', 'new customization'}:
             return cls.CONFIG
         return IssueType(item)
 
@@ -167,7 +167,7 @@ class Report(commands.Cog):
         """
         Interactively report a bug or feature request in GitHub.
 
-        Issue type can be "bug", "feature request" ("request"), "new config" ("config").
+        Issue type can be "bug", "feature request" ("request"), "new customization" ("customize").
         """
         try:
             issue_type = IssueType.replace(issue_type)
@@ -278,17 +278,12 @@ class Report(commands.Cog):
             return
         pending = await self.pending_approval()
         approved = None
-        entry = None
+        entry = message = None
         channel = self.bot.get_channel(payload.channel_id)
         if channel is None:
             return
         user = channel.guild.get_member(payload.user_id)
         if user is None:
-            return
-
-        try:
-            message = await channel.fetch_message(payload.message_id)
-        except NotFound:
             return
 
         for entry in pending:
@@ -302,6 +297,13 @@ class Report(commands.Cog):
                     elif str(payload.emoji) == '\N{THUMBS DOWN SIGN}':
                         approved = False
             await self.pending_approval(popping=entry)
+
+            try:
+                message = channel.get_message(payload.message_id)
+                if message is None:
+                    message = await channel.fetch_message(payload.message_id)
+            except NotFound:
+                return
             await message.remove_reaction(payload.emoji, user)
 
         if approved is None:
@@ -344,7 +346,9 @@ class Report(commands.Cog):
                 if channel is None:
                     return
                 try:
-                    message = await channel.fetch_message(payload.message_id)
+                    message = channel.get_message(payload.message_id)
+                    if message is None:
+                        message = await channel.fetch_message(payload.message_id)
                 except NotFound:
                     return
                 return await message.add_reaction(payload.emoji)

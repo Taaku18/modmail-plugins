@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 from discord import TextChannel, NotFound
 from discord.ext import commands
+from discord.utils import get
 
 import aiohttp
 from pymongo import ReturnDocument
@@ -299,7 +300,7 @@ class Report(commands.Cog):
             await self.pending_approval(popping=entry)
 
             try:
-                message = channel.get_message(payload.message_id)
+                message = get(self.bot.cached_messages, id=payload.message_id)
                 if message is None:
                     message = await channel.fetch_message(payload.message_id)
             except NotFound:
@@ -346,7 +347,7 @@ class Report(commands.Cog):
                 if channel is None:
                     return
                 try:
-                    message = channel.get_message(payload.message_id)
+                    message = get(self.bot.cached_messages, id=payload.message_id)
                     if message is None:
                         message = await channel.fetch_message(payload.message_id)
                 except NotFound:

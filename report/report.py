@@ -283,7 +283,10 @@ class Report(commands.Cog):
         channel = self.bot.get_channel(payload.channel_id)
         if channel is None:
             return
-        user = channel.guild.get_member(payload.user_id)
+        try:
+            user = channel.guild.get_member(payload.user_id)
+        except AttributeError:
+            return
         if user is None:
             return
 

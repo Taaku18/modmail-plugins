@@ -21,6 +21,7 @@ class IssueType(enum.Enum):
     BUG = 'bug'
     FEATURE = 'feature'
     CONFIG = 'customize'
+    FEEDBACK = 'feedback'
     NONE = 'none'
 
     @classmethod
@@ -96,7 +97,7 @@ class Report(commands.Cog):
         if self._allowed is None:
             config = await self.db.find_one({'_id': 'report-config'})
             self._allowed = (config or {}).get('allowed_channels', [])
-        return channel_id in self._allowed or not self._allowed
+        return not self._allowed or channel_id in self._allowed
 
     @commands.command()
     @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
@@ -205,6 +206,9 @@ class Report(commands.Cog):
         elif issue_type == IssueType.CONFIG:
             title = '[CONFIG SUGGESTION] '
             labels.append('config-suggestion')
+        elif issue_type == IssueType.FEEDBACK:
+            title = '[FEEDBACK]'
+            labels.append('feedback')
 
         await ctx.send('We will now start the composing the issue, type `:cancel` any time to stop.\n\n'
                        'Please type the **title** of your report (within 15 minutes):')
@@ -215,7 +219,7 @@ class Report(commands.Cog):
             return await ctx.send('Cancelled.')
         except asyncio.TimeoutError:
             return await ctx.send('Timed out, you will need to restart.')
-        title += msg.content.strip('` \n\t\r').title()
+        title += msg.content.title()
 
         await ctx.send('Please type the **message** of your report (within 15 minutes):')
 
@@ -226,7 +230,7 @@ class Report(commands.Cog):
         except asyncio.TimeoutError:
             return await ctx.send('Timed out, try again.')
 
-        desc = msg.content.strip('` \n\t\r')
+        desc = msg.content
         desc += f'\n\n\nIssue created by `@{ctx.author.name}#{ctx.author.discriminator}`, ' \
             f'Discord ID: `{ctx.author.id}`.'
 
@@ -241,11 +245,10 @@ class Report(commands.Cog):
             return await ctx.send(f'Timed out, you will need to restart.')
 
         url = 'https://api.github.com/repos/'
-        if msg.content.strip('` \n\t\r').lower() == 'modmail':
+        if msg.content.lower() == 'modmail':
             url += 'kyb3r/modmail/'
         else:
-            match = re.match(r'^<?(?:(?:https?://)?github\.com/|/)?([a-zA-Z0-9\-]+/[a-zA-Z0-9\-]+)/?>?$',
-                             msg.content.strip('` \n\t\r'))
+            match = re.match(r'^<?(?:(?:https?://)?github\.com/|/)?([a-zA-Z0-9\-]+/[a-zA-Z0-9\-]+)/?>?$', msg.content)
             if match is None:
                 return await ctx.send('Invalid GitHub repo, specify in the format `owner/repo`.')
             url += match.group(1) + '/'
@@ -279,15 +282,30 @@ class Report(commands.Cog):
             return
         pending = await self.pending_approval()
         approved = None
-        entry = message = None
+        entry = None
+
         channel = self.bot.get_channel(payload.channel_id)
         if channel is None:
-            return
+            try:
+                channel = self.bot.fetch_channel(payload.channel_id)
+            except NotFound:
+                return
+
         try:
             user = channel.guild.get_member(payload.user_id)
         except AttributeError:
             return
         if user is None:
+            try:
+                user = channel.guild.fetch_member(payload.user_id)
+            except NotFound:
+                return
+
+        try:
+            message = get(self.bot.cached_messages, id=payload.message_id)
+            if message is None:
+                message = await channel.fetch_message(payload.message_id)
+        except NotFound:
             return
 
         for entry in pending:
@@ -300,14 +318,7 @@ class Report(commands.Cog):
                         approved = True
                     elif str(payload.emoji) == '\N{THUMBS DOWN SIGN}':
                         approved = False
-            await self.pending_approval(popping=entry)
-
-            try:
-                message = get(self.bot.cached_messages, id=payload.message_id)
-                if message is None:
-                    message = await channel.fetch_message(payload.message_id)
-            except NotFound:
-                return
+                    await self.pending_approval(popping=entry)
             await message.remove_reaction(payload.emoji, user)
 
         if approved is None:
@@ -315,12 +326,11 @@ class Report(commands.Cog):
         await message.unpin()
         await message.clear_reactions()
 
-        author = channel.guild.get_member(entry['user_id'])
-        user_mention = f'<@!{entry["user_id"]}>' if author is None else f'{author.mention}'
+        user_mention = f'<@!{entry["user_id"]}>'
 
         if not approved:
-            return await channel.send(f'{user_mention} {user.name} has denied your issue.')
-        await channel.send(f'{user_mention} {user.name} has approved your issue.')
+            return await channel.send(f'{user_mention}: {user.name} has denied your issue.')
+        await channel.send(f'{user_mention}: {user.name} has approved your issue.')
 
         if not self.access_token:
             config = await self.db.find_one({'_id': 'report-config'})

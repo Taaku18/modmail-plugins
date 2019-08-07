@@ -279,7 +279,7 @@ class Report(commands.Cog):
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload):
         if payload.user_id == self.bot.user.id:
-            return
+            return print(1)
         pending = await self.pending_approval()
         approved = None
         entry = None
@@ -289,24 +289,24 @@ class Report(commands.Cog):
             try:
                 channel = self.bot.fetch_channel(payload.channel_id)
             except NotFound:
-                return
+                return print(2)
 
         try:
             user = channel.guild.get_member(payload.user_id)
         except AttributeError:
-            return
+            return print(3)
         if user is None:
             try:
                 user = channel.guild.fetch_member(payload.user_id)
             except NotFound:
-                return
+                return print(4)
 
         try:
             message = get(self.bot.cached_messages, id=payload.message_id)
             if message is None:
                 message = await channel.fetch_message(payload.message_id)
         except NotFound:
-            return
+            return print(5)
 
         for entry in pending:
             if entry['msg_id'] != payload.message_id:
@@ -322,7 +322,8 @@ class Report(commands.Cog):
             await message.remove_reaction(payload.emoji, user)
 
         if approved is None:
-            return
+            return print(6)
+
         await message.unpin()
         await message.clear_reactions()
 

@@ -255,8 +255,8 @@ class Report(commands.Cog):
         url += 'issues'
 
         data = {
-            'title': title,
-            'body': desc,
+            'title': title.replace('\n', '<br>'),
+            'body': desc.replace('\n', '<br>'),
             'labels': labels,
         }
 

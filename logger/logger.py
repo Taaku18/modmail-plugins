@@ -334,7 +334,7 @@ class Logger(commands.Cog):
             elif audit.action == AuditLogAction.kick:
                 await channel.send(embed=self.make_embed(
                     f'Member Kicked',
-                    f'{audit.target.mention} has been kicked by {audit.user.mention}.',
+                    f'{audit.target} has been kicked by {audit.user.mention}.',
                     time=audit.created_at,
                     fields=[('Reason:', escape(audit.reason) or 'No Reason', False)]
                 ))
@@ -350,7 +350,7 @@ class Logger(commands.Cog):
             elif audit.action == AuditLogAction.ban:
                 await channel.send(embed=self.make_embed(
                     f'Member Banned',
-                    f'{audit.target.mention} has been banned by {audit.user.mention}.',
+                    f'{audit.target} has been banned by {audit.user.mention}.',
                     time=audit.created_at,
                     fields=[('Reason:', escape(audit.reason) or 'No Reason', False)]
                 ))
@@ -358,7 +358,7 @@ class Logger(commands.Cog):
             elif audit.action == AuditLogAction.unban:
                 await channel.send(embed=self.make_embed(
                     f'Member Unbanned',
-                    f'{audit.target.mention} has been unbanned by {audit.user.mention}.',
+                    f'{audit.target} has been unbanned by {audit.user.mention}.',
                     time=audit.created_at
                 ))
 

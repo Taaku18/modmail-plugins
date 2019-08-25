@@ -642,7 +642,7 @@ class Logger(commands.Cog):
             return
         await channel.send(embed=self.make_embed(
             'Member Left',
-            f'{member.mention} has left.'
+            f'{member} has left.'
         ))
 
     def make_embed(self, title, description='', *, time=None, fields=None, footer=None):

@@ -1,6 +1,8 @@
 import difflib
 import re
 
+from pkg_resources import parse_version
+
 from discord import Embed
 from discord.ext import commands
 from discord.utils import escape_mentions
@@ -14,6 +16,8 @@ class Colors(commands.Cog):
     """
     Conversions between hex, RGB, and color names.
     """
+    def __init__(self, bot):
+        self.bot = bot
 
     @commands.group(invoke_without_command=True, aliases=['colour'])
     @checks.has_permissions(PermissionLevel.REGULAR)
@@ -26,7 +30,9 @@ class Colors(commands.Cog):
         if hex_code is None:
             return await ctx.send(f'Color "{escape_mentions(name)}" is not a known color name.')
 
-        hex_code = hex_code[1:]
+        if self.bot.version < parse_version('3.3.0-dev0'):
+            hex_code = hex_code[1:]
+
         r, g, b = tuple(int(hex_code[i:i + 2], 16) for i in (0, 2, 4))
 
         embed = Embed(title=name.title(), description=f'Hex: `#{hex_code}`, RGB: `{r}, {g}, {b}`.')
@@ -46,8 +52,10 @@ class Colors(commands.Cog):
         if len(hex_code) == 3:
             hex_code = ''.join(s for s in hex_code for _ in range(2))
 
-        possibilities = {v: k for k, v in ALL_COLORS.items() if v[1::2] == hex_code[::2]}
-
+        if self.bot.version >= parse_version('3.3.0-dev0'):
+            possibilities = {v: k for k, v in ALL_COLORS.items() if v[::2] == hex_code[::2]}
+        else:
+            possibilities = {v: k for k, v in ALL_COLORS.items() if v[1::2] == hex_code[::2]}
         closest_hex = difflib.get_close_matches(hex_code, possibilities, n=1)
         if not closest_hex:
             return await ctx.send(f'Hex code `#{hex_code}` does not have an known color name.')
@@ -55,7 +63,10 @@ class Colors(commands.Cog):
 
         clean_name = re.match(r'^(?:[^:]+:)?([^:]+)$', possibilities[closest_hex]).group(1)
         embed = Embed(title=f'#{hex_code}', description=f'Closest color name: "{clean_name.title()}".')
-        embed.set_thumbnail(url=f'https://placehold.it/100/{closest_hex[1:]}?text=+')
+        if self.bot.version >= parse_version('3.3.0-dev0'):
+            embed.set_thumbnail(url=f'https://placehold.it/100/{closest_hex}?text=+')
+        else:
+            embed.set_thumbnail(url=f'https://placehold.it/100/{closest_hex[1:]}?text=+')
         return await ctx.send(embed=embed)
 
     @color.command()
@@ -74,7 +85,10 @@ class Colors(commands.Cog):
 
         hex_code = '{0:02x}{1:02x}{2:02x}'.format(r, g, b)
 
-        possibilities = {v: k for k, v in ALL_COLORS.items() if v[1::2] == hex_code[::2]}
+        if self.bot.version >= parse_version('3.3.0-dev0'):
+            possibilities = {v: k for k, v in ALL_COLORS.items() if v[::2] == hex_code[::2]}
+        else:
+            possibilities = {v: k for k, v in ALL_COLORS.items() if v[1::2] == hex_code[::2]}
 
         closest_hex = difflib.get_close_matches(hex_code, possibilities, n=1)
         if not closest_hex:
@@ -83,7 +97,10 @@ class Colors(commands.Cog):
 
         clean_name = re.match(r'^(?:[^:]+:)?([^:]+)$', possibilities[closest_hex]).group(1)
         embed = Embed(title=f'RGB {r}, {g}, {b}', description=f'Closest color name: "{clean_name.title()}".')
-        embed.set_thumbnail(url=f'https://placehold.it/100/{closest_hex[1:]}?text=+')
+        if self.bot.version >= parse_version('3.3.0-dev0'):
+            embed.set_thumbnail(url=f'https://placehold.it/100/{closest_hex}?text=+')
+        else:
+            embed.set_thumbnail(url=f'https://placehold.it/100/{closest_hex[1:]}?text=+')
         return await ctx.send(embed=embed)
 
     @commands.command()
@@ -127,4 +144,4 @@ class Colors(commands.Cog):
 
 
 def setup(bot):
-    bot.add_cog(Colors())
+    bot.add_cog(Colors(bot))

@@ -157,7 +157,13 @@ class Calculatorv2(commands.Cog):
         Basically a simple calculator-v2. This command is safe.
         """
         exp = cleanup_code(exp).splitlines()
-        output = '\n'.join(sy.pretty(self.calc(line.strip()), use_unicode=True) for line in exp)
+        output = ''
+        for i, line in enumerate(exp, start=1):
+            try:
+                output += sy.pretty(self.calc(line.strip()), use_unicode=True) + '\n'
+            except Exception as e:
+                output += f"Error on line {i}: {e}."
+
         return await ctx.send(f'```\n{output}\n```')
 
 

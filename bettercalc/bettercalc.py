@@ -41,10 +41,10 @@ calc_grammar = """
     ?atom: final
          | "-" atom              -> neg
          | "+" atom
-         | "pi"i | "π"           -> pi
+         | ("pi"i | "π")         -> pi
          | "e"i                  -> e
-         | "inf"i | "oo"i        -> inf
-         | "phi"i | "φ"          -> phi
+         | ("inf"i | "oo"i)      -> inf
+         | ("phi"i | "φ")        -> phi
          | "c"i                  -> c
 
          | ("sin"i "(" trig ")" | "sin"i trig2)    -> sin

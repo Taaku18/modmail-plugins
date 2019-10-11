@@ -28,14 +28,15 @@ calc_grammar = """
         | product "/" atom         -> div
         | product "//" atom        -> floor_div
         | product "^" atom         -> exp
+        | product "**" atom        -> exp
         | product "(" atom ")"     -> mul
         | product NAME             -> imp_mul
 
     ?trig: sum
-        | sum ("deg"i | "degree"i | "degrees"i)  -> to_radian
+        | sum ("deg"i | "degree"i | "degrees"i | "°")  -> to_radian
 
     ?trig2: atom
-        | final ("deg"i | "degree"i | "degrees"i) -> to_radian
+        | final ("deg"i | "degree"i | "degrees"i | "°") -> to_radian
 
     ?atom: final
          | "-" atom              -> neg

@@ -75,7 +75,7 @@ calc_grammar = """
 
 @v_args(inline=True)
 class CalculateTree(Transformer):
-    number = float
+    number = sy.Float
 
     def __init__(self):
         self.vars = {}

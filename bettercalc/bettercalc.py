@@ -164,7 +164,7 @@ class Calculatorv2(commands.Cog):
             try:
                 e = self.calc(line.strip())
                 if hasattr(e, 'evalf'):
-                    e = e.evalf(n=CalculateTree.precision)
+                    e = e.evalf(n=CalculateTree.precision, chop=True)
 
                 outputs += [f"Line {i}: " + str(e) + '\n']
             except Exception as e:

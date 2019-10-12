@@ -14,7 +14,6 @@ from core.paginator import MessagePaginatorSession
 
 from discord.ext import commands
 
-mp.dps = 50
 
 calc_grammar = """
     ?start: sum
@@ -81,6 +80,13 @@ class CalculateTree(Transformer):
     def __init__(self):
         self.vars = {}
         self.reserved = {'oo', 'ln'} | set(CalculateTree.__dict__)
+
+    precision = mp.dps = 20
+
+    @classmethod
+    def set_precision(cls, n):
+        mp.dps = n
+        cls.precision = n
 
     add = op.add
     sub = op.sub
@@ -158,7 +164,7 @@ class Calculatorv2(commands.Cog):
             try:
                 e = self.calc(line.strip())
                 if hasattr(e, 'evalf'):
-                    e = e.evalf()
+                    e = e.evalf(n=CalculateTree.precision)
 
                 outputs += [f"Line {i}: " + str(e) + '\n']
             except Exception as e:
@@ -175,6 +181,17 @@ class Calculatorv2(commands.Cog):
 
         session = MessagePaginatorSession(ctx, *messages)
         return await session.run()
+
+    @commands.command()
+    @checks.has_permissions(PermissionLevel.MODERATOR)
+    async def calcprec(self, ctx, *, precision: int):
+        """
+        Change the precision of calculator. Resets to 20 digits when the bot restarts.
+        """
+        if precision > 100:
+            return await ctx.send("Maximum precision is 100.")
+        CalculateTree.set_precision(precision)
+        return await ctx.send(f"Successfully set precision to {precision}.")
 
 
 def setup(bot):

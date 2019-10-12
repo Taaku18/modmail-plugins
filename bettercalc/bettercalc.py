@@ -15,9 +15,13 @@ from core.paginator import MessagePaginatorSession
 from discord.ext import commands
 
 
+REMOVE_ZERO = re.compile(r'(?:(\.\d+?)0+|(\d\.0)0+)\b')
+REMOVE_CODE = re.compile(r'^\s*`{3,}(\w+\n)?|(\n\s*)(?=\n)|`{3,}\s*$')
+
 calc_grammar = """
     ?start: sum
           | NAME "=" sum    -> assign_var
+          | ("print"i | "repr"i ) sum
 
     ?sum: product
         | sum "+" product   -> add
@@ -80,7 +84,7 @@ class CalculateTree(Transformer):
 
     def __init__(self):
         self.vars = {}
-        self.reserved = {'oo', 'ln'} | set(CalculateTree.__dict__)
+        self.reserved = {'oo', 'ln', 'print', 'repr'} | set(CalculateTree.__dict__)
 
     precision = mp.dps = 20
 
@@ -160,14 +164,14 @@ class Calculatorv2(commands.Cog):
         """
         Basically a simple calculator-v2. This command is safe.
         """
-        exp = re.sub(r'^\s*`{3,}(\w+\n)?|(\n\s*)(?=\n)|`{3,}\s*$', '', exp).strip().splitlines()
+        exp = REMOVE_CODE.sub('', exp).strip().splitlines()
         outputs = []
         for i, line in enumerate(exp, start=1):
             try:
                 e = self.calc(line.strip())
                 if hasattr(e, 'evalf'):
                     e = e.evalf(n=CalculateTree.precision, chop=True)
-                e = re.sub(r'(?:(\.\d+?)0+|(\d\.0)0+)\b', r'\1\2', str(e))
+                e = REMOVE_ZERO.sub(r'\1\2', str(e))
 
                 outputs += [f"Line {i}: " + e + '\n']
             except Exception as e:

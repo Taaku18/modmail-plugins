@@ -3,13 +3,14 @@
 #
 
 import operator as op
+import re
 import sympy as sy
 from lark import Lark, Transformer, v_args
 from mpmath import mp
 
 from core import checks
 from core.models import PermissionLevel
-from core.utils import cleanup_code
+from core.paginator import MessagePaginatorSession
 
 from discord.ext import commands
 
@@ -41,11 +42,6 @@ calc_grammar = """
     ?atom: final
          | "-" atom              -> neg
          | "+" atom
-         | ("pi"i | "π")         -> pi
-         | "e"i                  -> e
-         | ("inf"i | "oo"i)      -> inf
-         | ("phi"i | "φ")        -> phi
-         | "c"i                  -> c
 
          | ("sin"i "(" trig ")" | "sin"i trig2)    -> sin
          | ("tan"i "(" trig ")" | "tan"i trig2)    -> tan
@@ -63,8 +59,13 @@ calc_grammar = """
 
          | "(" sum ")"
 
-    ?final: NUMBER        -> number
-        | NAME            -> var
+    ?final: NUMBER               -> number
+         | ("pi"i | "π")         -> pi
+         | "e"i                  -> e
+         | ("inf"i | "oo"i)      -> inf
+         | ("phi"i | "φ")        -> phi
+         | "c"i                  -> c
+         | NAME                  -> var
 
     %import common.WORD -> NAME
     %import common.NUMBER
@@ -139,7 +140,6 @@ class CalculateTree(Transformer):
         return sy.log(n, b)
 
 
-
 class Calculatorv2(commands.Cog):
     """
     It's working!! FINALLY - Taki.
@@ -156,15 +156,29 @@ class Calculatorv2(commands.Cog):
         """
         Basically a simple calculator-v2. This command is safe.
         """
-        exp = cleanup_code(exp).splitlines()
-        output = ''
+        exp = re.sub(r'^\s*`{3,}(\w+\n)?|(\n\s*)(?=\n)|`{3,}\s*$', '', exp).strip().splitlines()
+        outputs = []
         for i, line in enumerate(exp, start=1):
             try:
-                output += sy.pretty(self.calc(line.strip()), use_unicode=True) + '\n'
-            except Exception as e:
-                output += f"Error on line {i}: {e}."
+                e = self.calc(line.strip())
+                if hasattr(e, 'evalf'):
+                    e = e.evalf()
 
-        return await ctx.send(f'```\n{output}\n```')
+                outputs += [f"Line {i}: " + str(e) + '\n']
+            except Exception as e:
+                outputs += [f"Error on line {i}: {e}.\n"]
+
+        messages = ['```\n']
+        for output in outputs:
+            if len(messages[-1]) + len(output) + len('```') > 2048:
+                messages[-1] += '```'
+                messages.append('```\n')
+            messages[-1] += output
+        if not messages[-1].endswith('```'):
+            messages[-1] += '```'
+
+        session = MessagePaginatorSession(ctx, *messages)
+        return await session.run()
 
 
 def setup(bot):

@@ -30,7 +30,7 @@ calc_grammar = """
         | product "^" atom         -> exp
         | product "**" atom        -> exp
         | product "(" atom ")"     -> mul
-        | product NAME             -> imp_mul
+        | product func         -> imp_mul
 
     ?trig: sum
         | sum ("deg"i | "degree"i | "degrees"i | "°")  -> to_radian
@@ -38,10 +38,12 @@ calc_grammar = """
     ?trig2: atom
         | final ("deg"i | "degree"i | "degrees"i | "°") -> to_radian
 
-    ?atom: final
+    ?atom: func
          | "-" atom              -> neg
          | "+" atom
+         | NUMBER               -> number
 
+    ?func: final
          | ("sin"i "(" trig ")" | "sin"i trig2)    -> sin
          | ("tan"i "(" trig ")" | "tan"i trig2)    -> tan
          | ("cos"i "(" trig ")" | "cos"i trig2)    -> cos
@@ -58,12 +60,11 @@ calc_grammar = """
 
          | "(" sum ")"
 
-    ?final: NUMBER               -> number
+    ?final: NAME                 -> var
          | ("pi"i | "π")         -> pi
          | "e"i                  -> e
          | ("inf"i | "oo"i)      -> inf
          | ("phi"i | "φ")        -> phi
-         | NAME                  -> var
 
     %import common.WORD -> NAME
     %import common.NUMBER
@@ -105,7 +106,8 @@ class CalculateTree(Transformer):
     neg = op.neg
 
     def imp_mul(self, a, b):
-        b = self.var(b)
+        if isinstance(b, str):
+            b = self.var(b)
         return a * b
 
     def assign_var(self, name, value):

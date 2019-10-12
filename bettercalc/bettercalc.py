@@ -64,7 +64,6 @@ calc_grammar = """
          | "e"i                  -> e
          | ("inf"i | "oo"i)      -> inf
          | ("phi"i | "φ")        -> phi
-         | "c"i                  -> c
          | NAME                  -> var
 
     %import common.WORD -> NAME
@@ -126,9 +125,6 @@ class CalculateTree(Transformer):
 
     def phi(self):
         return mp.phi
-
-    def c(self):
-        return mp.catalan
 
     def sqrt(self, n):
         return sy.sqrt(n)

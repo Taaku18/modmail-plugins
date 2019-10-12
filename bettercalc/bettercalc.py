@@ -94,7 +94,7 @@ class CalculateTree(Transformer):
     div = op.truediv
     floor_div = op.floordiv
     exp = op.pow
-    abs = abs
+    abs = sy.Abs
     factorial = sy.factorial
     sin = sy.sin
     tan = sy.tan
@@ -165,8 +165,9 @@ class Calculatorv2(commands.Cog):
                 e = self.calc(line.strip())
                 if hasattr(e, 'evalf'):
                     e = e.evalf(n=CalculateTree.precision, chop=True)
+                e = re.sub(r'(?:(\.\d+?)0+|(\d)\.0+)\b', r'\1\2', str(e))
 
-                outputs += [f"Line {i}: " + str(e) + '\n']
+                outputs += [f"Line {i}: " + e + '\n']
             except Exception as e:
                 outputs += [f"Error on line {i}: {e}.\n"]
 

@@ -72,6 +72,8 @@ calc_grammar = """
     ?calcfunc: NAME "'" [paren]                                   -> diff
         | paren "'"                                               -> diff2
         | "diff"i "(" sum ("," NAME)* ")"                         -> diff2
+        | "lim"i (paren | final) "as"i NAME "->" final            -> lim
+        | "integrate"i "(" sum ("," NAME)* ")"                    -> integrate
 
     ?paren: "(" sum ")"
 
@@ -101,7 +103,7 @@ class CalculateTree(Transformer):
 
     def __init__(self):
         self.vars = {}
-        self.reserved = {'oo', 'ln', 'print', 'repr', 'latex', 'del'} | set(CalculateTree.__dict__)
+        self.reserved = {'oo', 'ln', 'print', 'repr', 'latex', 'del', 'as'} | set(CalculateTree.__dict__)
 
     precision = 20
     mp.dps = 30
@@ -181,7 +183,13 @@ class CalculateTree(Transformer):
         return f.diff(*resp)
 
     def diff2(self, f, *resp):
-        return f.diff(*resp)
+        return f.diff(*map(sy.Symbol, resp))
+
+    def lim(self, f, name, final):
+        return f.limit(name, final)
+
+    def integrate(self, f, *resp):
+        return f.integrate(*map(sy.Symbol, resp))
 
     def to_radian(self, n):
         return n * sy.pi / 180
@@ -263,8 +271,8 @@ class Calculatorv2(commands.Cog):
         """
         Change the precision of calculator. Resets to 20 digits when the bot restarts.
         """
-        if precision > 100:
-            return await ctx.send("Maximum precision is 100.")
+        if precision > 200:
+            return await ctx.send("Maximum precision is 200.")
         CalculateTree.set_precision(precision)
         return await ctx.send(f"Successfully set precision to {precision}.")
 

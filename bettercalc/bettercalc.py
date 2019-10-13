@@ -35,39 +35,47 @@ calc_grammar = """
         | product ("^" | "**") atom  -> exp
         | product "(" atom ")"       -> mul
 
+    ?atom: "-" atom                  -> neg
+         | "+" atom
+         | func
+
+    ?func: paren
+         | mathfunc
+         | trigfunc
+         | final
+
     ?trig: sum
         | sum ("degrees"i | "degree"i | "deg"i | "°")    -> to_radian
 
-    ?trig2: atom
+    ?trig2: final
         | final ("degrees"i | "degree"i | "deg"i | "°")  -> to_radian
 
-    ?atom: func
-         | "-" atom              -> neg
-         | "+" atom
+    ?trigfunc: ("sin"i "(" trig ")" | "sin"i trig2)    -> sin
+         | ("tan"i "(" trig ")" | "tan"i trig2)        -> tan
+         | ("cos"i "(" trig ")" | "cos"i trig2)        -> cos
+         | ("asin"i "(" trig ")" | "asin"i trig2)      -> asin
+         | ("atan"i "(" trig ")" | "atan"i trig2)      -> atan
+         | ("acos"i "(" trig ")" | "acos"i trig2)      -> acos
 
-    ?func: final
-         | ("sin"i "(" trig ")" | "sin"i trig2)    -> sin
-         | ("tan"i "(" trig ")" | "tan"i trig2)    -> tan
-         | ("cos"i "(" trig ")" | "cos"i trig2)    -> cos
-         | ("asin"i "(" trig ")"| "asin"i trig2)   -> asin
-         | ("atan"i "(" trig ")"| "atan"i trig2)   -> atan
-         | ("acos"i "(" trig ")"| "acos"i trig2)   -> acos
+    ?mathfunc: "sqrt"i paren                                       -> sqrt
+         | ("log"i [float | "_" final] paren | "log"i final)       -> log
+         | "ln"i  (paren | final)                                  -> log
+         | ("abs"i paren | "|" sum "|")                            -> abs
+         | (final "!" | paren "!" | "factorial"i paren)            -> factorial
 
-         | "sqrt"i "(" sum ")"                     -> sqrt
-         | ("log"i | "ln"i) ("(" sum ")" | final)  -> log
-         | /(log_?)(?!\\s)/i final "(" sum ")"     -> log_base
-         | ("abs"i "(" sum ")" | "|" sum "|")      -> abs
+    ?paren: "(" sum ")"
 
-         | (final "!" | "(" sum ")" "!" | "factorial"i "(" sum ")") -> factorial
+    ?final: const
+         | name
+         | float
 
-         | "(" sum ")"
+    ?name: NAME                 -> var
+    ?float: NUMBER               -> number
 
-    ?final: NAME                 -> var
-         |  NUMBER               -> number
-         | ("pi"i | "π")         -> pi
-         | "e"i                  -> e
-         | ("inf"i | "oo"i)      -> inf
-         | ("phi"i | "φ")        -> phi
+    ?const: ("pi"i | "π")         -> pi
+         | "e"i                   -> e
+         | ("inf"i | "oo"i)       -> inf
+         | ("phi"i | "φ")         -> phi
 
     %import common.WORD          -> NAME
     %import common.NUMBER
@@ -144,10 +152,9 @@ class CalculateTree(Transformer):
     def sqrt(self, n):
         return sy.sqrt(n)
 
-    def log(self, n):
-        return sy.log(n)
-
-    def log_base(self, b, n):
+    def log(self, b, n=None):
+        if n is None:
+            return sy.log(b)
         return sy.log(n, b)
 
 

@@ -36,10 +36,10 @@ calc_grammar = """
         | product "(" atom ")"       -> mul
 
     ?trig: sum
-        | sum ("deg"i | "degree"i | "degrees"i | "°")    -> to_radian
+        | sum ("degrees"i | "degree"i | "deg"i | "°")    -> to_radian
 
     ?trig2: atom
-        | final ("deg"i | "degree"i | "degrees"i | "°")  -> to_radian
+        | final ("degrees"i | "degree"i | "deg"i | "°")  -> to_radian
 
     ?atom: func
          | "-" atom              -> neg
@@ -55,7 +55,7 @@ calc_grammar = """
 
          | "sqrt"i "(" sum ")"                     -> sqrt
          | ("log"i | "ln"i) "(" sum ")"            -> log
-         | ("log"i | "log_"i) final "(" sum ")"    -> log_base
+         | ("log_"i _ "log"i) final "(" sum ")"    -> log_base
          | ("abs"i "(" sum ")" | "|" sum "|")      -> abs
 
          | (final "!" | "(" sum ")" "!" | "factorial"i "(" sum ")") -> factorial
@@ -147,7 +147,7 @@ class CalculateTree(Transformer):
     def log(self, n):
         return sy.log(n)
 
-    def log_base(self, n, b):
+    def log_base(self, b, n):
         return sy.log(n, b)
 
 

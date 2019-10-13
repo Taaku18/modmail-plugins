@@ -54,8 +54,8 @@ calc_grammar = """
          | ("acos"i "(" trig ")"| "acos"i trig2)   -> acos
 
          | "sqrt"i "(" sum ")"                     -> sqrt
-         | ("log"i | "ln"i) "(" sum ")"            -> log
-         | ("log_"i _ | "log"i) final "(" sum ")"    -> log_base
+         | ("log"i | "ln"i) ("(" sum ")" | final)  -> log
+         | (/(log_?)(?!\\s)/i final "(" sum ")"    -> log_base
          | ("abs"i "(" sum ")" | "|" sum "|")      -> abs
 
          | (final "!" | "(" sum ")" "!" | "factorial"i "(" sum ")") -> factorial

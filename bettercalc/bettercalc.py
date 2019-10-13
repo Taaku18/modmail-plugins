@@ -34,8 +34,8 @@ calc_grammar = """
         | product "*" atom               -> mul
         | product "/" atom               -> div
         | product "//" atom              -> floor_div
-        | product ("^" | "**") atom      -> exp
         | product "(" atom ")"           -> mul
+        | product func                   -> mul
 
     ?atom: "-" atom                      -> neg
         | "+" atom
@@ -45,6 +45,7 @@ calc_grammar = """
         | paren
         | mathfunc
         | trigfunc
+        | calcfunc
         | final
 
     ?trig: sum
@@ -65,6 +66,12 @@ calc_grammar = """
         | "ln"i  (paren | final)                                  -> log
         | ("abs"i paren | "|" sum "|")                            -> abs
         | (final "!" | paren "!" | "factorial"i paren)            -> factorial
+        | func ("^" | "**") atom                                  -> exp
+
+
+    ?calcfunc: NAME "'" [paren]                                   -> diff
+        | paren "'"                                               -> diff2
+        | "diff"i "(" sum ("," NAME)* ")"                         -> diff2
 
     ?paren: "(" sum ")"
 
@@ -96,11 +103,12 @@ class CalculateTree(Transformer):
         self.vars = {}
         self.reserved = {'oo', 'ln', 'print', 'repr', 'latex', 'del'} | set(CalculateTree.__dict__)
 
-    precision = mp.dps = 20
+    precision = 20
+    mp.dps = 30
 
     @classmethod
     def set_precision(cls, n):
-        mp.dps = n
+        mp.dps = n + 10
         cls.precision = n
 
     add = op.add
@@ -129,6 +137,8 @@ class CalculateTree(Transformer):
         return sy.latex(value)
 
     def assign_var(self, name, value):
+        if name.lower() in self.reserved:
+            raise ValueError(f"{name} is reserved.")
         self.vars[sy.Symbol(name)] = value
         return f"{sy.Symbol(name)} = {value}"
 
@@ -139,6 +149,8 @@ class CalculateTree(Transformer):
         return f"Removed {sy.Symbol(name)}"
 
     def assign_func(self, name, resp, value):
+        if name.lower() in self.reserved:
+            raise ValueError(f"{name} is reserved.")
         if sy.Symbol(resp) in self.vars:
             raise ValueError(f"Cannot set {resp} as the independent variable as it's in-use; "
                              f"delete the variable with \"del {resp}\".")
@@ -152,6 +164,24 @@ class CalculateTree(Transformer):
         if not isinstance(v, tuple):
             return v * value
         return v[0].subs({v[1]: value})
+
+    def diff(self, name, value=None):
+        v = self.vars.get(sy.Symbol(name), sy.Symbol(name))
+        resp = []
+        if isinstance(v, tuple):
+            if value is not None:
+                f = v[0].subs({v[1]: value})
+            else:
+                f = v[0]
+            resp += [v[1]]
+        else:
+            if value is not None:
+                raise ValueError(f"{name} is not a function")
+            f = v
+        return f.diff(*resp)
+
+    def diff2(self, f, *resp):
+        return f.diff(*resp)
 
     def to_radian(self, n):
         return n * sy.pi / 180

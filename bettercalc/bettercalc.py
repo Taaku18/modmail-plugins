@@ -20,62 +20,64 @@ REMOVE_CODE = re.compile(r'^\s*`{3,}(\w+\n)?|(\n\s*)(?=\n)|`{3,}\s*$')
 
 calc_grammar = """
     ?start: sum
-          | NAME "=" sum                   -> assign_var
-          | ("print"i | "repr"i ) sum
-          | "latex" sum                    -> latex_print
+        | NAME "=" sum                   -> assign_var
+        | NAME "(" NAME ")" "=" sum      -> assign_func
+        | ("print"i | "repr"i ) sum
+        | "latex" sum                    -> latex_print
 
     ?sum: product
-        | sum "+" product            -> add
-        | sum "-" product            -> sub
+        | sum "+" product                -> add
+        | sum "-" product                -> sub
 
     ?product: atom
-        | product "*" atom           -> mul
-        | product "/" atom           -> div
-        | product "//" atom          -> floor_div
-        | product ("^" | "**") atom  -> exp
-        | product "(" atom ")"       -> mul
+        | product "*" atom               -> mul
+        | product "/" atom               -> div
+        | product "//" atom              -> floor_div
+        | product ("^" | "**") atom      -> exp
+        | product "(" atom ")"           -> mul
 
-    ?atom: "-" atom                  -> neg
-         | "+" atom
-         | func
+    ?atom: "-" atom                      -> neg
+        | "+" atom
+        | func
 
-    ?func: paren
-         | mathfunc
-         | trigfunc
-         | final
+    ?func: NAME paren                    -> call_func
+        | paren
+        | mathfunc
+        | trigfunc
+        | final
 
     ?trig: sum
-        | sum ("degrees"i | "degree"i | "deg"i | "°")    -> to_radian
+        | sum ("degrees"i | "degree"i | "deg"i | "°")             -> to_radian
 
     ?trig2: final
-        | final ("degrees"i | "degree"i | "deg"i | "°")  -> to_radian
+        | final ("degrees"i | "degree"i | "deg"i | "°")           -> to_radian
 
-    ?trigfunc: ("sin"i "(" trig ")" | "sin"i trig2)    -> sin
-         | ("tan"i "(" trig ")" | "tan"i trig2)        -> tan
-         | ("cos"i "(" trig ")" | "cos"i trig2)        -> cos
-         | ("asin"i "(" trig ")" | "asin"i trig2)      -> asin
-         | ("atan"i "(" trig ")" | "atan"i trig2)      -> atan
-         | ("acos"i "(" trig ")" | "acos"i trig2)      -> acos
+    ?trigfunc: ("sin"i "(" trig ")" | "sin"i trig2)               -> sin
+        | ("tan"i "(" trig ")" | "tan"i trig2)                    -> tan
+        | ("cos"i "(" trig ")" | "cos"i trig2)                    -> cos
+        | ("asin"i "(" trig ")" | "asin"i trig2)                  -> asin
+        | ("atan"i "(" trig ")" | "atan"i trig2)                  -> atan
+        | ("acos"i "(" trig ")" | "acos"i trig2)                  -> acos
 
-    ?mathfunc: "sqrt"i paren                                       -> sqrt
-         | ("log"i [float | "_" final] paren | "log"i final)       -> log
-         | "ln"i  (paren | final)                                  -> log
-         | ("abs"i paren | "|" sum "|")                            -> abs
-         | (final "!" | paren "!" | "factorial"i paren)            -> factorial
+    ?mathfunc: "sqrt"i paren                                      -> sqrt
+        | ("log"i [float | "_" final] paren | "log"i final)       -> log
+        | "ln"i  (paren | final)                                  -> log
+        | ("abs"i paren | "|" sum "|")                            -> abs
+        | (final "!" | paren "!" | "factorial"i paren)            -> factorial
 
     ?paren: "(" sum ")"
 
     ?final: const
-         | name
-         | float
+        | name
+        | float
 
-    ?name: NAME                 -> var
+    ?name: NAME                  -> var
     ?float: NUMBER               -> number
 
-    ?const: ("pi"i | "π")         -> pi
-         | "e"i                   -> e
-         | ("inf"i | "oo"i)       -> inf
-         | ("phi"i | "φ")         -> phi
+    ?const: ("pi"i | "π")        -> pi
+        | "e"i                   -> e
+        | ("inf"i | "oo"i)       -> inf
+        | ("phi"i | "φ")         -> phi
 
     %import common.WORD          -> NAME
     %import common.NUMBER
@@ -129,13 +131,26 @@ class CalculateTree(Transformer):
         self.vars[sy.Symbol(name)] = value
         return f"{sy.Symbol(name)} = {value}"
 
+    def assign_func(self, name, resp, value):
+        self.vars[sy.Symbol(name)] = (value, sy.Symbol(resp))
+        return f"{sy.Symbol(name)} = {value}"
+
+    def call_func(self, name, value):
+        v = self.vars.get(sy.Symbol(name), sy.Symbol(name))
+        if not isinstance(v, tuple):
+            return v * value
+        return v[0].subs({v[1]: value})
+
     def to_radian(self, n):
         return n * sy.pi / 180
 
     def var(self, name):
         if name.lower() in self.reserved:
             raise ValueError(f"{name} is reserved.")
-        return self.vars.get(sy.Symbol(name), sy.Symbol(name))
+        v = self.vars.get(sy.Symbol(name), sy.Symbol(name))
+        if isinstance(v, tuple):
+            v = v[0]
+        return v
 
     def pi(self):
         return sy.pi
@@ -190,7 +205,7 @@ class Calculatorv2(commands.Cog):
 
         messages = ['```\n']
         for output in outputs:
-            if len(messages[-1]) + len(output) + len('```') > 2048:
+            if len(messages[-1]) + len(output) + len('```') > 2000:
                 messages[-1] += '```'
                 messages.append('```\n')
             messages[-1] += output

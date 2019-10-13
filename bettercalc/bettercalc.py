@@ -55,7 +55,7 @@ calc_grammar = """
 
          | "sqrt"i "(" sum ")"                     -> sqrt
          | ("log"i | "ln"i) "(" sum ")"            -> log
-         | ("log_"i _ "log"i) final "(" sum ")"    -> log_base
+         | ("log_"i _ | "log"i) final "(" sum ")"    -> log_base
          | ("abs"i "(" sum ")" | "|" sum "|")      -> abs
 
          | (final "!" | "(" sum ")" "!" | "factorial"i "(" sum ")") -> factorial

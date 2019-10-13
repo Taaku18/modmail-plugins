@@ -20,32 +20,30 @@ REMOVE_CODE = re.compile(r'^\s*`{3,}(\w+\n)?|(\n\s*)(?=\n)|`{3,}\s*$')
 
 calc_grammar = """
     ?start: sum
-          | NAME "=" sum    -> assign_var
+          | NAME "=" sum                   -> assign_var
           | ("print"i | "repr"i ) sum
+          | "latex" sum                    -> latex_print
 
     ?sum: product
-        | sum "+" product   -> add
-        | sum "-" product   -> sub
+        | sum "+" product            -> add
+        | sum "-" product            -> sub
 
     ?product: atom
-        | product "*" atom         -> mul
-        | product "/" atom         -> div
-        | product "//" atom        -> floor_div
-        | product "^" atom         -> exp
-        | product "**" atom        -> exp
-        | product "(" atom ")"     -> mul
-        | product func         -> imp_mul
+        | product "*" atom           -> mul
+        | product "/" atom           -> div
+        | product "//" atom          -> floor_div
+        | product ("^" | "**") atom  -> exp
+        | product "(" atom ")"       -> mul
 
     ?trig: sum
-        | sum ("deg"i | "degree"i | "degrees"i | "°")  -> to_radian
+        | sum ("deg"i | "degree"i | "degrees"i | "°")    -> to_radian
 
     ?trig2: atom
-        | final ("deg"i | "degree"i | "degrees"i | "°") -> to_radian
+        | final ("deg"i | "degree"i | "degrees"i | "°")  -> to_radian
 
     ?atom: func
          | "-" atom              -> neg
          | "+" atom
-         | NUMBER               -> number
 
     ?func: final
          | ("sin"i "(" trig ")" | "sin"i trig2)    -> sin
@@ -65,12 +63,13 @@ calc_grammar = """
          | "(" sum ")"
 
     ?final: NAME                 -> var
+         |  NUMBER               -> number
          | ("pi"i | "π")         -> pi
          | "e"i                  -> e
          | ("inf"i | "oo"i)      -> inf
          | ("phi"i | "φ")        -> phi
 
-    %import common.WORD -> NAME
+    %import common.WORD          -> NAME
     %import common.NUMBER
     %import common.WS_INLINE
 
@@ -98,7 +97,9 @@ class CalculateTree(Transformer):
     mul = op.mul
     div = op.truediv
     floor_div = op.floordiv
-    exp = op.pow
+    neg = op.neg
+
+    exp = sy.Pow
     abs = sy.Abs
     factorial = sy.factorial
     sin = sy.sin
@@ -107,12 +108,14 @@ class CalculateTree(Transformer):
     asin = sy.asin
     atan = sy.atan
     acos = sy.acos
-    neg = op.neg
 
-    def imp_mul(self, a, b):
-        if isinstance(b, str):
-            b = self.var(b)
-        return a * b
+    # def imp_mul(self, a, b):
+    #     if isinstance(b, str):
+    #         b = self.var(b)
+    #     return a * b
+
+    def latex_print(self, value):
+        return sy.latex(value)
 
     def assign_var(self, name, value):
         self.vars[sy.Symbol(name)] = value
@@ -155,6 +158,7 @@ class Calculatorv2(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
+        self.bot._ct = CalculateTree
         self.calc_parser = Lark(calc_grammar, parser='lalr', transformer=CalculateTree())
         self.calc = self.calc_parser.parse
 

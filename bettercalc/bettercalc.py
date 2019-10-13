@@ -23,7 +23,8 @@ calc_grammar = """
         | NAME "=" sum                   -> assign_var
         | NAME "(" NAME ")" "=" sum      -> assign_func
         | ("print"i | "repr"i ) sum
-        | "latex" sum                    -> latex_print
+        | "latex"i sum                   -> latex_print
+        | "del"i NAME                    -> del_var
 
     ?sum: product
         | sum "+" product                -> add
@@ -93,7 +94,7 @@ class CalculateTree(Transformer):
 
     def __init__(self):
         self.vars = {}
-        self.reserved = {'oo', 'ln', 'print', 'repr'} | set(CalculateTree.__dict__)
+        self.reserved = {'oo', 'ln', 'print', 'repr', 'latex', 'del'} | set(CalculateTree.__dict__)
 
     precision = mp.dps = 20
 
@@ -131,7 +132,18 @@ class CalculateTree(Transformer):
         self.vars[sy.Symbol(name)] = value
         return f"{sy.Symbol(name)} = {value}"
 
+    def del_var(self, name):
+        if sy.Symbol(name) not in self.vars:
+            raise ValueError(f"{name} does not exist.")
+        self.vars.pop(sy.Symbol(name))
+        return f"Removed {sy.Symbol(name)}"
+
     def assign_func(self, name, resp, value):
+        if sy.Symbol(resp) in self.vars:
+            raise ValueError(f"Cannot set {resp} as the independent variable as it's in-use; "
+                             f"delete the variable with \"del {resp}\".")
+        if resp.lower() in self.reserved:
+            raise ValueError(f"{name} is reserved.")
         self.vars[sy.Symbol(name)] = (value, sy.Symbol(resp))
         return f"{sy.Symbol(name)} = {value}"
 

@@ -171,16 +171,16 @@ class CalculateTree(Transformer):
         v = self.vars.get(sy.Symbol(name), sy.Symbol(name))
         resp = []
         if isinstance(v, tuple):
-            if value is not None:
-                f = v[0].subs({v[1]: value})
-            else:
-                f = v[0]
+            f = v[0]
             resp += [v[1]]
         else:
             if value is not None:
                 raise ValueError(f"{name} is not a function")
             f = v
-        return f.diff(*resp)
+        d = f.diff(*resp)
+        if value is not None and isinstance(v, tuple):
+            d = d.subs({v[1]: value})
+        return d
 
     def diff2(self, f, *resp):
         return f.diff(*map(sy.Symbol, resp))

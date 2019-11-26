@@ -1,3 +1,5 @@
+from urllib.parse import quote
+
 import discord
 from discord.ext import commands
 
@@ -23,17 +25,54 @@ class Animals(commands.Cog):
         embed.set_image(url=cat)
         return await ctx.channel.send(embed=embed)
 
-    @commands.command(aliases=["dog"])
+    @commands.group(aliases=["dog"], invoke_without_command=True)
     @checks.has_permissions(PermissionLevel.REGULAR)
-    async def woof(self, ctx):
+    async def woof(self, ctx, *, breed=None):
         """
         Random dog pic.
 
-        API from random.dog, more coming soon!
+        You may specify a dog breed, see `{prefix}woof breeds` to find all supported breeds.
+
+        API from dog.ceo!
         """
-        async with self.bot.session.get("https://random.dog/woof.json?filter=mp3") as r:
-            dog = (await r.json())["url"]
+        if breed is not None:
+            *sub_breed, breed = breed.split()
+            if sub_breed:
+                url = f"https://dog.ceo/api/breed/{quote(breed, safe='')}/{quote(sub_breed[0], safe='')}/images/random"
+            else:
+                url = f"https://dog.ceo/api/breed/{quote(breed, safe='')}/images/random"
+        else:
+            url = "https://dog.ceo/api/breeds/image/random"
+
+        async with self.bot.session.get(url) as r:
+            dog = (await r.json())["message"]
+            breed, *sub_breed = dog.split('/')[-2].split('-')
+            if sub_breed:
+                breed = sub_breed[0] + " " + breed
+
         embed = discord.Embed(title=":dog: ~woof~")
+        embed.set_image(url=dog)
+        embed.set_footer(text=breed)
+        return await ctx.channel.send(embed=embed)
+
+    @woof.command()
+    @checks.has_permissions(PermissionLevel.REGULAR)
+    async def breeds(self, ctx):
+        """
+        Fetch a list of dog breeds.
+        """
+        async with self.bot.session.get("https://dog.ceo/api/breeds/image/random") as r:
+            dog = (await r.json())["message"]
+
+        async with self.bot.session.get("https://dog.ceo/api/breeds/list/all") as r:
+            dogs = (await r.json())["message"]
+            breeds = []
+            for breed, sub_breeds in dogs.items():
+                breeds.append(breed)
+                for sub_breed in sub_breeds:
+                    breeds.append(sub_breed + " " + breed)
+
+        embed = discord.Embed(title=":dog: ~woof~", description=", ".join(breeds))
         embed.set_image(url=dog)
         return await ctx.channel.send(embed=embed)
 

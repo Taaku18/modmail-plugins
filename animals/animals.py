@@ -28,9 +28,21 @@ class Animals(commands.Cog):
         embed.set_image(url=cat)
         return await ctx.channel.send(embed=embed)
 
-    async def catapi(self, ctx):
-        ...
-        return await self.randomcat(ctx)
+    async def catapi(self, ctx, breed=None):
+        if breed is not None:
+            url = f"https://api.thecatapi.com/v1/images/search?breed_id={quote(breed)}"
+        else:
+            url = "https://api.thecatapi.com/v1/images/search"
+        async with self.bot.session.get(url, headers={'x-api-key': self.meowkey}) as r:
+            data = await r.json()
+            if not data:
+                return await ctx.channel.send("No cat found...")
+            cat = data[0]
+            embed = discord.Embed(title=":cat: ~meow~")
+            embed.set_image(url=cat["url"])
+            if cat.get("breeds"):
+                embed.set_footer(text=", ".join(b["name"] for b in cat["breeds"]))
+
         return await ctx.channel.send(embed=embed)
 
     @commands.group(aliases=["cat"], invoke_without_command=True)
@@ -41,11 +53,15 @@ class Animals(commands.Cog):
 
         API from random.cat or TheCatAPI.com.
 
+        Breed can only be the codes found from `{prefix}meow breeds` command.
+
         To request from TheCatAPI.com, an API key must be set with `{prefix}meow apikey yourkeyhere`.
         Sign up for an API key for FREE here: https://thecatapi.com/signup.
         """
         if self.meowkey is not None:
-            return await self.catapi(ctx)
+            return await self.catapi(ctx, breed)
+        if breed is not None:
+            return await ctx.channel.send("Breed cannot be specified without using TheCatAPI.")
         return await self.randomcat(ctx)
 
     @meow.command(name="apikey")
@@ -83,10 +99,9 @@ class Animals(commands.Cog):
             for breed in data:
                 # Bug with API for Javanese breed
                 if breed.get("alt_names", " ").strip():
-                    breed = f"{breed['name']} ({breed['alt_names']})".title()
-                else:
-                    breed = breed["name"]
-                breeds.append(breed)
+                    for alt_name in breed["alt_names"].split(','):
+                        breeds.append(f"{alt_name.strip().title()} (`{breed['id']}`)")
+                breeds.append(f"{breed['name'].strip().title()} (`{breed['id']}`)")
 
         embeds = []
         for i, names in enumerate(zip_longest(*(iter(sorted(breeds)),) * 12)):

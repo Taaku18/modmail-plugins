@@ -30,7 +30,7 @@ class Animals(commands.Cog):
 
     async def catapi(self, ctx):
         ...
-        return self.randomcat(ctx)
+        return await self.randomcat(ctx)
         return await ctx.channel.send(embed=embed)
 
     @commands.group(aliases=["cat"], invoke_without_command=True)
@@ -81,7 +81,8 @@ class Animals(commands.Cog):
             data = await r.json()
             breeds = []
             for breed in data:
-                if breed.get("alt_names"):
+                # Bug with API for Javanese breed
+                if breed.get("alt_names", " ").strip():
                     breed = f"{breed['name']} ({breed['alt_names']})".title()
                 else:
                     breed = breed["name"]

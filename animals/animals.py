@@ -57,7 +57,7 @@ class Animals(commands.Cog):
 
         embed = discord.Embed(title=":dog: ~woof~")
         embed.set_image(url=dog)
-        embed.set_footer(text=breed)
+        embed.set_footer(text=breed.title())
         return await ctx.channel.send(embed=embed)
 
     @woof.command()
@@ -88,6 +88,10 @@ class Animals(commands.Cog):
             if data["status"] != "error":
                 for dog, embed in zip(data["message"], embeds):
                     embed.set_image(url=dog)
+                    breed, *sub_breed = dog.split('/')[-2].split('-')
+                    if sub_breed:
+                        breed = sub_breed[0] + " " + breed
+                    embed.set_footer(text=breed.title())
 
         session = EmbedPaginatorSession(ctx, *embeds)
         await session.run()

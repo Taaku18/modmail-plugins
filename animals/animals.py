@@ -81,8 +81,10 @@ class Animals(commands.Cog):
             data = await r.json()
             breeds = []
             for breed in data:
-                if breed["alt_names"]:
+                if breed.get("alt_names"):
                     breed = f"{breed} ({breed['alt_names']})".title()
+                else:
+                    breed = breed["name"]
                 breeds.append(breed)
 
         embeds = []
@@ -96,7 +98,7 @@ class Animals(commands.Cog):
             data = await r.json()
             for cat, embed in zip(data, embeds):
                 embed.set_image(url=cat["url"])
-                if cat["breeds"]:
+                if cat.get("breeds"):
                     embed.set_footer(text=", ".join(b["name"] for b in cat["breeds"]))
 
         session = EmbedPaginatorSession(ctx, *embeds)

@@ -82,7 +82,7 @@ class Animals(commands.Cog):
             breeds = []
             for breed in data:
                 if breed.get("alt_names"):
-                    breed = f"{breed} ({breed['alt_names']})".title()
+                    breed = f"{breed['name']} ({breed['alt_names']})".title()
                 else:
                     breed = breed["name"]
                 breeds.append(breed)

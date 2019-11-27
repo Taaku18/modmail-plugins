@@ -36,6 +36,9 @@ class Animals(commands.Cog):
         async with self.bot.session.get(url, headers={'x-api-key': self.meowkey}) as r:
             data = await r.json()
             if not data:
+                if breed is not None:
+                    return await ctx.channel.send("Invalid breed, only breed code is supported.\n"
+                                                  f"To find the breed code, type `{self.bot.prefix}meow breeds`.")
                 return await ctx.channel.send("No cat found...")
             cat = data[0]
             embed = discord.Embed(title=":cat: ~meow~")
@@ -90,6 +93,9 @@ class Animals(commands.Cog):
     @meow.command(name="breeds")
     @checks.has_permissions(PermissionLevel.REGULAR)
     async def meow_breeds(self, ctx):
+        """
+        Fetch cat breeds!
+        """
         if self.meowkey is None:
             return await ctx.channel.send("No API key found!")
         async with self.bot.session.get("https://api.thecatapi.com/v1/breeds",

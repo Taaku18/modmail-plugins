@@ -73,12 +73,12 @@ class Animals(commands.Cog):
             dogs = data["message"]
             breeds = []
             for breed, sub_breeds in dogs.items():
-                breeds.append(breed)
+                breeds.append(breed.title())
                 for sub_breed in sub_breeds:
-                    breeds.append(sub_breed + " " + breed)
+                    breeds.append((sub_breed + " " + breed).title())
 
         embeds = []
-        for i, names in enumerate(zip_longest(*(iter(breeds),) * 20)):
+        for i, names in enumerate(zip_longest(*(iter(breeds),) * 12)):
             description = utils.format_description(i, names)
             embed = discord.Embed(title=":dog: ~woof~", description=description)
             embeds.append(embed)
@@ -91,10 +91,6 @@ class Animals(commands.Cog):
 
         session = EmbedPaginatorSession(ctx, *embeds)
         await session.run()
-
-        embed = discord.Embed(title=":dog: ~woof~", description=", ".join(breeds))
-        embed.set_image(url=dog)
-        return await ctx.channel.send(embed=embed)
 
     @commands.command(aliases=["fox"])
     @checks.has_permissions(PermissionLevel.REGULAR)

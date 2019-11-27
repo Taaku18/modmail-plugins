@@ -1,3 +1,4 @@
+from itertools import zip_longest
 from urllib.parse import quote
 
 import discord
@@ -5,7 +6,8 @@ from discord.ext import commands
 
 from core import checks
 from core.models import PermissionLevel
-
+from core.paginator import EmbedPaginatorSession, MessagePaginatorSession
+from core import utils
 
 class Animals(commands.Cog):
     def __init__(self, bot):
@@ -45,7 +47,10 @@ class Animals(commands.Cog):
             url = "https://dog.ceo/api/breeds/image/random"
 
         async with self.bot.session.get(url) as r:
-            dog = (await r.json())["message"]
+            data = await r.json()
+            if data["status"] == "error":
+                return await ctx.channel.send(data["message"])
+            dog = data["message"]
             breed, *sub_breed = dog.split('/')[-2].split('-')
             if sub_breed:
                 breed = sub_breed[0] + " " + breed
@@ -61,16 +66,31 @@ class Animals(commands.Cog):
         """
         Fetch a list of dog breeds.
         """
-        async with self.bot.session.get("https://dog.ceo/api/breeds/image/random") as r:
-            dog = (await r.json())["message"]
-
         async with self.bot.session.get("https://dog.ceo/api/breeds/list/all") as r:
-            dogs = (await r.json())["message"]
+            data = await r.json()
+            if data["status"] == "error":
+                return await ctx.channel.send(data["message"])
+            dogs = data["message"]
             breeds = []
             for breed, sub_breeds in dogs.items():
                 breeds.append(breed)
                 for sub_breed in sub_breeds:
                     breeds.append(sub_breed + " " + breed)
+
+        embeds = []
+        for i, names in enumerate(zip_longest(*(iter(breeds),) * 20)):
+            description = utils.format_description(i, names)
+            embed = discord.Embed(title=":dog: ~woof~", description=description)
+            embeds.append(embed)
+
+        async with self.bot.session.get(f"https://dog.ceo/api/breeds/image/random/{len(embeds)}") as r:
+            data = await r.json()
+            if data["status"] != "error":
+                for dog, embed in zip(data["message"], embeds):
+                    embed.set_image(url=dog)
+
+        session = EmbedPaginatorSession(ctx, *embeds)
+        await session.run()
 
         embed = discord.Embed(title=":dog: ~woof~", description=", ".join(breeds))
         embed.set_image(url=dog)

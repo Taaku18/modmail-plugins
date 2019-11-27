@@ -9,23 +9,98 @@ from core.models import PermissionLevel
 from core.paginator import EmbedPaginatorSession, MessagePaginatorSession
 from core import utils
 
+
 class Animals(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.db = bot.plugin_db.get_partition(self)
+        self.meowkey = None
+        bot.loop.create_task(self.fetch_meowkey())
 
-    @commands.command(aliases=["cat"])
-    @checks.has_permissions(PermissionLevel.REGULAR)
-    async def meow(self, ctx):
-        """
-        Random cat pic.
+    async def fetch_meowkey(self):
+        config = await self.db.find_one({'_id': 'animals-config'})
+        self.meowkey = (config or {}).get("apikey")
 
-        API from random.cat, more coming soon!
-        """
+    async def randomcat(self, ctx):
         async with self.bot.session.get("http://aws.random.cat/meow") as r:
             cat = (await r.json())["file"]
         embed = discord.Embed(title=":cat: ~meow~")
         embed.set_image(url=cat)
         return await ctx.channel.send(embed=embed)
+
+    async def catapi(self, ctx):
+        ...
+        return self.randomcat(ctx)
+        return await ctx.channel.send(embed=embed)
+
+    @commands.group(aliases=["cat"], invoke_without_command=True)
+    @checks.has_permissions(PermissionLevel.REGULAR)
+    async def meow(self, ctx, *, breed=None):
+        """
+        Random cat pic.
+
+        API from random.cat or TheCatAPI.com.
+
+        To request from TheCatAPI.com, an API key must be set with `{prefix}meow apikey yourkeyhere`.
+        Sign up for an API key for FREE here: https://thecatapi.com/signup.
+        """
+        if self.meowkey is not None:
+            return await self.catapi(ctx)
+        return await self.randomcat(ctx)
+
+    @meow.command(name="apikey")
+    @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
+    async def meow_apikey(self, ctx, *, key):
+        """
+        Set API key for TheCatAPI.com!
+
+        To request from TheCatAPI.com, an API key must be set with `{prefix}meow apikey yourkeyhere`.
+        Sign up for an API key for FREE here: https://thecatapi.com/signup.
+
+        You may remove the API key with `{prefix}meow apikey clear`.
+        """
+        if key.lower() == "clear":
+            key = None
+        await self.db.find_one_and_update(
+            {'_id': 'animals-config'},
+            {'$set': {'apikey': key}},
+            upsert=True
+        )
+        self.meowkey = key
+        if key is None:
+            return await ctx.channel.send("Successfully removed API key for TheCatAPI.com!")
+        return await ctx.channel.send("Successfully set API key for TheCatAPI.com!")
+
+    @meow.command(name="breeds")
+    @checks.has_permissions(PermissionLevel.REGULAR)
+    async def meow_breeds(self, ctx):
+        if self.meowkey is None:
+            return await ctx.channel.send("No API key found!")
+        async with self.bot.session.get("https://api.thecatapi.com/v1/breeds",
+                                        headers={'x-api-key': self.meowkey}) as r:
+            data = await r.json()
+            breeds = []
+            for breed in data:
+                if breed["alt_names"]:
+                    breed = f"{breed} ({breed['alt_names']})".title()
+                breeds.append(breed)
+
+        embeds = []
+        for i, names in enumerate(zip_longest(*(iter(sorted(breeds)),) * 12)):
+            description = utils.format_description(i, names)
+            embed = discord.Embed(title=":cat: ~meow~", description=description)
+            embeds.append(embed)
+
+        async with self.bot.session.get(f"https://api.thecatapi.com/v1/images/search?limit={len(embeds)}",
+                                        headers={'x-api-key': self.meowkey}) as r:
+            data = await r.json()
+            for cat, embed in zip(data, embeds):
+                embed.set_image(url=cat["url"])
+                if cat["breeds"]:
+                    embed.set_footer(text=", ".join(b["name"] for b in cat["breeds"]))
+
+        session = EmbedPaginatorSession(ctx, *embeds)
+        await session.run()
 
     @commands.group(aliases=["dog"], invoke_without_command=True)
     @checks.has_permissions(PermissionLevel.REGULAR)
@@ -60,9 +135,9 @@ class Animals(commands.Cog):
         embed.set_footer(text=breed.title())
         return await ctx.channel.send(embed=embed)
 
-    @woof.command()
+    @woof.command(name="breeds")
     @checks.has_permissions(PermissionLevel.REGULAR)
-    async def breeds(self, ctx):
+    async def woof_breeds(self, ctx):
         """
         Fetch a list of dog breeds.
         """
@@ -78,7 +153,7 @@ class Animals(commands.Cog):
                     breeds.append((sub_breed + " " + breed).title())
 
         embeds = []
-        for i, names in enumerate(zip_longest(*(iter(breeds),) * 12)):
+        for i, names in enumerate(zip_longest(*(iter(sorted(breeds)),) * 12)):
             description = utils.format_description(i, names)
             embed = discord.Embed(title=":dog: ~woof~", description=description)
             embeds.append(embed)

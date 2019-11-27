@@ -29,7 +29,7 @@ class Animals(commands.Cog):
 
     @commands.group(aliases=["dog"], invoke_without_command=True)
     @checks.has_permissions(PermissionLevel.REGULAR)
-    async def woof(self, ctx, *, breed=None):
+    async def woof(self, ctx, *, breed: str.lower = None):
         """
         Random dog pic.
 

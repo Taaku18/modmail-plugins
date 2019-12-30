@@ -139,7 +139,7 @@ class Animals(commands.Cog):
         if breed is not None:
             if "".join(breed.lower().split()).strip() == "sharpbit" or any(u.name.lower() == "sharpbit" for u in ctx.message.mentions):
                 embed = discord.Embed(title=":dog: ~woof~")
-                embed.set_image(url="https://cdn.discordapp.com/avatars/281821029490229251/e57de3c6f966cbf7be1944cde8977260.webp?size=1024")
+                embed.set_image(url="https://i.imgur.com/i2uODxh.jpg")
                 embed.set_footer(text="SharpBit")
                 return await ctx.channel.send(embed=embed)
 

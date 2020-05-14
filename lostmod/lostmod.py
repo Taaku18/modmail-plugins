@@ -255,7 +255,7 @@ class Lost(commands.Cog):
                           color=self.bot.error_color)
             return await ctx.send(embed=embed)
 
-        if msg.author.id != int(m.group(1)):
+        if ctx.author.id != int(m.group(1)):
             embed = Embed(title='Error',
                           description=f'You cannot terminate someone else\'s trade offer.',
                           color=self.bot.error_color)

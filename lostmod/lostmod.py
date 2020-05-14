@@ -77,7 +77,7 @@ class Lost(commands.Cog):
         embed.set_footer(text='Type "cancel" anytime to cancel, timeout: 2 minutes.')
         await ctx.send(embed=embed)
 
-        for _ in range(3):
+        for i in range(3):
             try:
                 m = await self.bot.wait_for('message', check=check_message, timeout=120)
                 content = m.content.strip()
@@ -91,10 +91,11 @@ class Lost(commands.Cog):
 
             if options is not None:
                 if content not in options:
-                    embed = Embed(title='Error',
-                                  description=f'Invalid option, try again.',
-                                  color=self.bot.error_color)
-                    await ctx.send(embed=embed)
+                    if i < 2:
+                        embed = Embed(title='Error',
+                                      description=f'Invalid option, try again.',
+                                      color=self.bot.error_color)
+                        await ctx.send(embed=embed)
                     continue
                 await m.add_reaction('✅')
                 return content

@@ -138,12 +138,14 @@ class Lost(commands.Cog):
         return channel
 
     @commands.group(invoke_without_command=True)
-    async def trade(self, ctx):
+    async def trade(self, ctx, *, msg=None):
         """
         Start a trade offer. Will ping @Trader role.
         """
         if ctx.author.id in self.in_progress:
             return
+        if msg is not None:
+            return await ctx.send_help(ctx.command)
 
         role = get(ctx.guild.roles, name='Trader')
         channel = await self.get_trade_channel(ctx)
@@ -267,7 +269,7 @@ class Lost(commands.Cog):
                           color=self.bot.error_color)
             return await ctx.send(embed=embed)
 
-        embed.title = embed.title + ' (Ended)'
+        embed.title = embed.title + ' (Completed)'
         embed.color = self.bot.error_color
         embed.remove_field(4)
         embed.add_field(name='Status', value='Completed')

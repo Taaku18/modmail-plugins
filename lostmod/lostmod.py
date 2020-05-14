@@ -138,9 +138,11 @@ class Lost(commands.Cog):
         return channel
 
     @commands.group(invoke_without_command=True)
+    @checks.has_permissions(PermissionLevel.REGULAR)
     async def trade(self, ctx, *, msg=None):
         """
-        Start a trade offer. Will ping @Trader role.
+        Start a trade offer.
+        Can choose to ping @Trader role.
         """
         if ctx.author.id in self.in_progress:
             return
@@ -222,6 +224,7 @@ class Lost(commands.Cog):
         await ctx.send(embed=embed)
 
     @trade.command(name='complete', aliases=['terminate', 'end'])
+    @checks.has_permissions(PermissionLevel.REGULAR)
     async def trade_complete(self, ctx, *, msg: Union[discord.Message, int]):
         """
         Mark a trade deal as complete.

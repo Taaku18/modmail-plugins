@@ -143,6 +143,12 @@ class Animals(commands.Cog):
                 embed.set_footer(text="SharpBit")
                 return await ctx.channel.send(embed=embed)
 
+            elif "".join(breed.lower().split()).strip().replace('x', 'a') == "savage" or any(u.name.lower() == "sxvage" for u in ctx.message.mentions):
+                embed = discord.Embed(title=":dog: shall die  ~woof~")
+                embed.set_image(url="https://i.imgur.com/MKtAV7H.png")
+                embed.set_footer(text="Sxvage Hates Doggos")
+                return await ctx.channel.send(embed=embed)
+
             *sub_breed, breed = breed.split()
             if sub_breed:
                 url = f"https://dog.ceo/api/breed/{quote(breed, safe='')}/{quote(sub_breed[0], safe='')}/images/random"

@@ -199,14 +199,14 @@ class Lost(commands.Cog):
                 return
             ping = r.startswith('y')
 
-        embed = Embed(title=f'{mode.capitalize()} Deal',
+        embed = Embed(title=f'{name}\'s {mode.capitalize()} Deal',
                       color=self.bot.main_color)
 
         embed.add_field(name=mode.capitalize(), value=item)
         embed.add_field(name='Price Offer', value=price)
         embed.add_field(name='IGN', value=escape_markdown(name))
         embed.add_field(name='Additional Info', value=info)
-        embed.add_field(name='Status', value='Ongoing', inline=False)
+        embed.add_field(name='Status', value='Ongoing')
         embed.set_footer(text=f'Trade started by {ctx.author.name}#{ctx.author.discriminator} - {ctx.author.id}.')
 
         if ping:
@@ -215,13 +215,14 @@ class Lost(commands.Cog):
             await channel.send(embed=embed)
         self.in_progress.remove(ctx.author.id)
 
-        embed = Embed(title='Successfully sent trade offer!', color=self.bot.main_color)
+        embed = Embed(description='Successfully sent trade offer!',
+                      color=self.bot.main_color)
         await ctx.send(embed=embed)
 
-    @trade.command(name='complete', aliases=['terminate'])
+    @trade.command(name='complete', aliases=['terminate', 'end'])
     async def trade_complete(self, ctx, *, msg: Union[discord.Message, int]):
         """
-
+        Mark a trade deal as complete.
         """
         if ctx.author.id in self.in_progress:
             return
@@ -245,7 +246,9 @@ class Lost(commands.Cog):
                           color=self.bot.error_color)
             return await ctx.send(embed=embed)
 
-        m = re.match(r'Trade started by .+#\d{4} - (\d+)\.', msg.embeds[0].footer['text'])
+        embed = msg.embeds[0]
+
+        m = re.match(r'Trade started by .+#\d{4} - (\d+)\.', embed.footer.text)
         if m is None:
             embed = Embed(title='Error',
                           description=f'Not a trade offer.',
@@ -257,9 +260,8 @@ class Lost(commands.Cog):
                           description=f'You cannot terminate someone else\'s trade offer.',
                           color=self.bot.error_color)
             return await ctx.send(embed=embed)
-        embed = msg.embeds[0]
 
-        if embed.fields[4]['value'] == 'Completed':
+        if embed.fields[4].value == 'Completed':
             embed = Embed(title='Error',
                           description=f'The trade is already completed.',
                           color=self.bot.error_color)
@@ -267,7 +269,7 @@ class Lost(commands.Cog):
 
         embed.color = self.bot.error_color
         embed.remove_field(4)
-        embed.add_field(name='Status', value='Completed', inline=False)
+        embed.add_field(name='Status', value='Completed')
         await msg.edit(embed=embed)
 
         embed = Embed(description=f'Successfully terminated trade offer.',

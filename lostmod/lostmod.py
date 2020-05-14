@@ -72,16 +72,16 @@ class Lost(commands.Cog):
                 raise asyncio.TimeoutError
             return m.author == ctx.author
 
-        embed = Embed(description=msg)
+        embed = Embed(description=msg, color=self.bot.main_color)
         embed.set_footer(text='Type "cancel" anytime to cancel, timeout: 2 minutes.')
+        await ctx.send(embed=embed)
 
         for _ in range(3):
             try:
                 m = await self.bot.wait_for('message', check=check_message, timeout=120)
                 content = m.content.strip().lower()
             except asyncio.TimeoutError:
-                embed = Embed(title='Error',
-                              description=f'Timed out or cancelled.',
+                embed = Embed(description=f'Timed out or cancelled.',
                               color=self.bot.error_color)
                 await ctx.send(embed=embed)
                 return None
@@ -98,8 +98,7 @@ class Lost(commands.Cog):
             await m.add_reaction('✅')
             return content
 
-        embed = Embed(title='Error',
-                      description=f'Too many retries, aborting.',
+        embed = Embed(description=f'Too many retries, aborting.',
                       color=self.bot.error_color)
         await ctx.send(embed=embed)
         return None
@@ -177,7 +176,7 @@ class Lost(commands.Cog):
 
         name = r
 
-        embed = Embed(title=f'{name}\'s {mode} offer')
+        embed = Embed(title=f'{name}\'s {mode} offer', color=self.bot.main_color)
         if mode == 'buying':
             disc = f'Looking to buy: {item}.\n\nPrice offer: {price}'
         else:

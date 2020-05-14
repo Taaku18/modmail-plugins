@@ -67,7 +67,7 @@ class Lost(commands.Cog):
                           color=self.bot.main_color)
         return await ctx.send(embed=embed)
 
-    async def request(self, ctx, msg, options=None):
+    async def request(self, ctx, msg, options=None, lower=True):
         def check_message(m):
             if m.content.strip().lower() == 'cancel':
                 raise asyncio.TimeoutError
@@ -80,7 +80,9 @@ class Lost(commands.Cog):
         for _ in range(3):
             try:
                 m = await self.bot.wait_for('message', check=check_message, timeout=120)
-                content = m.content.strip().lower()
+                content = m.content.strip()
+                if lower:
+                    content = content.lower()
             except asyncio.TimeoutError:
                 embed = Embed(description=f'Timed out or cancelled.',
                               color=self.bot.error_color)
@@ -172,7 +174,7 @@ class Lost(commands.Cog):
 
         info = r
 
-        r = await self.request(ctx, f'What is your IGN?')
+        r = await self.request(ctx, f'What is your IGN?', lower=False)
         if r is None:
             self.in_progress.remove(ctx.author.id)
             return
@@ -181,13 +183,13 @@ class Lost(commands.Cog):
 
         ping = False
         if role is not None:
-            r = await self.request(ctx, f'Do you want to ping {role.mention} (y/n)?', {'y', 'n', 'yes', 'no'})
+            r = await self.request(ctx, f'Do you want to ping the {role.mention} role (y/n)?', {'y', 'n', 'yes', 'no'})
             if r is None:
                 self.in_progress.remove(ctx.author.id)
                 return
             ping = r.startswith('y')
 
-        embed = Embed(title=f'{name}\'s Trade Offer',
+        embed = Embed(title=f'{name}\'s {mode.capitalize()} Deal',
                       color=self.bot.main_color)
 
         embed.add_field(name=mode.capitalize(), value=item)

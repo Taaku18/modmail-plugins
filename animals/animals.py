@@ -143,7 +143,7 @@ class Animals(commands.Cog):
                 embed.set_footer(text="SharpBit")
                 return await ctx.channel.send(embed=embed)
 
-            elif "".join(breed.lower().split()).strip().replace('x', 'a') == "savage" or any(u.name.lower() == "sxvage" for u in ctx.message.mentions):
+            elif "".join(breed.lower().split()).strip().replace('x', 'a') == "savage" or any(u.name.lower() == "_sxvage_" for u in ctx.message.mentions):
                 embed = discord.Embed(title=":dog: shall die  ~woof~")
                 embed.set_image(url="https://i.imgur.com/MKtAV7H.png")
                 embed.set_footer(text="Sxvage Hates Doggos")

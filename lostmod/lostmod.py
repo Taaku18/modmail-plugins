@@ -267,6 +267,7 @@ class Lost(commands.Cog):
                           color=self.bot.error_color)
             return await ctx.send(embed=embed)
 
+        embed.title = embed.title + ' (Ended)'
         embed.color = self.bot.error_color
         embed.remove_field(4)
         embed.add_field(name='Status', value='Completed')

@@ -1,9 +1,11 @@
 import asyncio
+import re
+from typing import Union
 
 import discord
 from discord import Embed
 from discord.ext import commands
-from discord.utils import get
+from discord.utils import get, escape_markdown
 
 from core import checks
 from core.models import PermissionLevel
@@ -107,22 +109,14 @@ class Lost(commands.Cog):
         await ctx.send(embed=embed)
         return None
 
-    @commands.group()
-    async def trade(self, ctx):
-        """
-        Start a trade offer. Will ping @Trader role.
-        """
-        if ctx.author.id in self.in_progress:
-            return
-
+    async def get_trade_channel(self, ctx):
         if self.trade_channel is None:
             embed = Embed(title='Error',
                           description=f'No trade channels has been set, '
                                       f'set one with `{self.bot.prefix}settradechannel`.',
                           color=self.bot.error_color)
-            return await ctx.send(embed=embed)
-
-        role = get(ctx.guild.roles, name='Trader')
+            await ctx.send(embed=embed)
+            return
 
         channel = self.bot.get_channel(self.trade_channel)
         if not channel:
@@ -139,7 +133,22 @@ class Lost(commands.Cog):
                               description=f'The current trade channel is invalid, '
                                           f'set a new one with `{self.bot.prefix}settradechannel`.',
                               color=self.bot.error_color)
-                return await ctx.send(embed=embed)
+                await ctx.send(embed=embed)
+                return None
+        return channel
+
+    @commands.group(invoke_without_command=True)
+    async def trade(self, ctx):
+        """
+        Start a trade offer. Will ping @Trader role.
+        """
+        if ctx.author.id in self.in_progress:
+            return
+
+        role = get(ctx.guild.roles, name='Trader')
+        channel = await self.get_trade_channel(ctx)
+        if channel is None:
+            return
 
         self.in_progress.add(ctx.author.id)
 
@@ -190,14 +199,15 @@ class Lost(commands.Cog):
                 return
             ping = r.startswith('y')
 
-        embed = Embed(title=f'{name}\'s {mode.capitalize()} Deal',
+        embed = Embed(title=f'{mode.capitalize()} Deal',
                       color=self.bot.main_color)
 
         embed.add_field(name=mode.capitalize(), value=item)
         embed.add_field(name='Price Offer', value=price)
+        embed.add_field(name='IGN', value=escape_markdown(name))
         embed.add_field(name='Additional Info', value=info)
-
-        embed.set_footer(text=f'Trade started by {ctx.author.name}#{ctx.author.discriminator}.')
+        embed.add_field(name='Status', value='Ongoing', inline=False)
+        embed.set_footer(text=f'Trade started by {ctx.author.name}#{ctx.author.discriminator} - {ctx.author.id}.')
 
         if ping:
             await channel.send(role.mention, embed=embed)
@@ -207,6 +217,62 @@ class Lost(commands.Cog):
 
         embed = Embed(title='Successfully sent trade offer!', color=self.bot.main_color)
         await ctx.send(embed=embed)
+
+    @trade.command(name='complete', aliases=['terminate'])
+    async def trade_complete(self, ctx, *, msg: Union[discord.Message, int]):
+        """
+
+        """
+        if ctx.author.id in self.in_progress:
+            return
+
+        channel = await self.get_trade_channel(ctx)
+        if channel is None:
+            return
+
+        if isinstance(msg, int):
+            try:
+                msg = await channel.fetch_message(msg)
+            except discord.NotFound:
+                embed = Embed(title='Error',
+                              description=f'Cannot find a message with that ID.',
+                              color=self.bot.error_color)
+                return await ctx.send(embed=embed)
+
+        if msg.channel != channel or msg.author != self.bot.user or not msg.embeds or not msg.embeds[0].footer:
+            embed = Embed(title='Error',
+                          description=f'Not a trade offer.',
+                          color=self.bot.error_color)
+            return await ctx.send(embed=embed)
+
+        m = re.match(r'Trade started by .+#\d{4} - (\d+)\.', msg.embeds[0].footer['text'])
+        if m is None:
+            embed = Embed(title='Error',
+                          description=f'Not a trade offer.',
+                          color=self.bot.error_color)
+            return await ctx.send(embed=embed)
+
+        if msg.author.id != int(m.group(1)):
+            embed = Embed(title='Error',
+                          description=f'You cannot terminate someone else\'s trade offer.',
+                          color=self.bot.error_color)
+            return await ctx.send(embed=embed)
+        embed = msg.embeds[0]
+
+        if embed.fields[4]['value'] == 'Completed':
+            embed = Embed(title='Error',
+                          description=f'The trade is already completed.',
+                          color=self.bot.error_color)
+            return await ctx.send(embed=embed)
+
+        embed.color = self.bot.error_color
+        embed.remove_field(4)
+        embed.add_field(name='Status', value='Completed', inline=False)
+        await msg.edit(embed=embed)
+
+        embed = Embed(description=f'Successfully terminated trade offer.',
+                      color=self.bot.main_color)
+        return await ctx.send(embed=embed)
 
 
 def setup(bot):

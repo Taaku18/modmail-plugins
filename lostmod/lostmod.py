@@ -3,6 +3,7 @@ import asyncio
 import discord
 from discord import Embed
 from discord.ext import commands
+from discord.utils import get
 
 from core import checks
 from core.models import PermissionLevel
@@ -118,6 +119,8 @@ class Lost(commands.Cog):
                           color=self.bot.error_color)
             return await ctx.send(embed=embed)
 
+        role = get(ctx.guild.roles, name='Trader')
+
         channel = self.bot.get_channel(self.trade_channel)
         if not channel:
             try:
@@ -137,7 +140,7 @@ class Lost(commands.Cog):
 
         self.in_progress.add(ctx.author.id)
 
-        r = await self.request(ctx, 'Are you buying or selling? Type "1" for buying and "2" for selling.',
+        r = await self.request(ctx, 'Are you buying or selling (b/s)?',
                                {'1', '2', 'buying', 'selling', 'b', 's', 'buy', 'sell'})
         if r is None:
             self.in_progress.remove(ctx.author.id)
@@ -176,17 +179,31 @@ class Lost(commands.Cog):
 
         name = r
 
-        embed = Embed(title=f'{name}\'s {mode} offer', color=self.bot.main_color)
-        if mode == 'buying':
-            disc = f'Looking to buy: {item}.\n\nPrice offer: {price}'
+        ping = False
+        if role is not None:
+            r = await self.request(ctx, f'Do you want to ping {role.mention} (y/n)?', {'y', 'n', 'yes', 'no'})
+            if r is None:
+                self.in_progress.remove(ctx.author.id)
+                return
+            ping = r.startswith('y')
+
+        embed = Embed(title=f'{name}\'s Trade Offer',
+                      color=self.bot.main_color)
+
+        embed.add_field(name=mode.capitalize(), value=item)
+        embed.add_field(name='Price Offer', value=price)
+        embed.add_field(name='Additional Info', value=info)
+
+        embed.set_footer(text=f'Trade started by {ctx.author.name}#{ctx.author.discriminator}.')
+
+        if ping:
+            await channel.send(role.mention, embed=embed)
         else:
-            disc = f'Selling: {item}.\n\nPrice offer: {price}'
-
-        disc += f'\n\nAdditional info: {info}'
-        embed.description = disc
-
-        await channel.send('@Trader', embed=embed)
+            await channel.send(embed=embed)
         self.in_progress.remove(ctx.author.id)
+
+        embed = Embed(title='Successfully sent trade offer!', color=self.bot.main_color)
+        await ctx.send(embed=embed)
 
 
 def setup(bot):

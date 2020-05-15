@@ -137,7 +137,7 @@ class Lost(commands.Cog):
                 return None
         return channel
 
-    @commands.group(invoke_without_command=True)
+    @commands.group(invoke_without_command=True, usage='')
     @checks.has_permissions(PermissionLevel.REGULAR)
     async def trade(self, ctx, *, msg=None):
         """

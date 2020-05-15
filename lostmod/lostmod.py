@@ -203,7 +203,7 @@ class Lost(commands.Cog):
                 return
             ping = r.startswith('y')
 
-        embed = Embed(title=f'{ctx.author.nick}\'s {mode.capitalize()} Deal',
+        embed = Embed(title=f'{ctx.author.nick or ctx.author.name}\'s {mode.capitalize()} Deal',
                       description=f'Message {ctx.author.mention} for trade!',
                       color=self.bot.main_color)
 

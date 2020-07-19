@@ -5,6 +5,7 @@ from aiohttp import ClientResponseError
 from urllib.parse import urlparse
 import re
 import typing
+import asyncio
 
 import discord
 from discord.ext import commands
@@ -19,6 +20,8 @@ class Audit(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.whname = "Modmail Audit Logger"
+        self._webhook = None
+        self._webhook_lock = asyncio.Lock()
         self.upload_url = f"https://api.cloudinary.com/v1_1/taku/image/upload"
         self.invite_regex = re.compile(
             r"(?:https?://)?(?:www\.)?(?:discord\.(?:gg|io|me|li)|(?:discordapp|discord)\.com/invite)/[\w]+"
@@ -56,25 +59,31 @@ class Audit(commands.Cog):
         )
 
     async def get_webhook(self):
-        webhook = get(await self.bot.guild.webhooks(), name=self.whname)
-        if webhook is None:
-            channel = self.bot.guild.get_channel("modmail-audit")
-            if not channel:
-                channel = await self.bot.guild.create_text_channel(
-                    "modmail-audit", overwrites={
-                        self.bot.guild.default_role: discord.PermissionOverwrite(read_messages=False),
-                        self.bot.guild.me: discord.PermissionOverwrite(read_messages=True)
-                    }, reason="Modmail Audit Plugin Channel"
-                )
-            webhook = await channel.create_webhook(name=self.whname, avatar=await self.bot.user.avatar_url.read(),
-                                                   reason="Modmail Audit Plugin Webhook")
-        return webhook
+        async with self._webhook_lock:
+            if self._webhook is not None:
+                return self._webhook
+            self._webhook = get(await self.bot.guild.webhooks(), name=self.whname)
+            if self._webhook is None:
+                channel = self.bot.guild.get_channel("modmail-audit")
+                if not channel:
+                    o = {r: discord.PermissionOverwrite(read_messages=True) for r in self.bot.guild.roles if r.permissions.view_audit_log}
+                    o.update(
+                        {
+                            self.bot.guild.default_role: discord.PermissionOverwrite(read_messages=False, manage_messages=False),
+                            self.bot.guild.me: discord.PermissionOverwrite(read_messages=True)
+                        }
+                    )
+                    channel = await self.bot.guild.create_text_channel(
+                        "modmail-audit", overwrites=o, reason="Modmail Audit Plugin Channel"
+                    )
+                self._webhook = await channel.create_webhook(name=self.whname, avatar=await self.bot.user.avatar_url.read(),
+                                                             reason="Modmail Audit Plugin Webhook")
+            return self._webhook
 
     @commands.group()
     @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
     async def audit(self, ctx):
         """Audit logs, copied from mee6."""
-
 
     @audit.command()
     @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
@@ -139,10 +148,21 @@ class Audit(commands.Cog):
             embed = discord.Embed(description="Disabled!", colour=discord.Colour.green())
         await ctx.send(embed=embed)
 
+    @audit.command()
+    @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
+    async def resetwh(self, ctx):
+        """Resets the webhook, if you deleted the webhook or audit channel."""
+        self._webhook = None
+        embed = discord.Embed(description="Reset!", colour=discord.Colour.green())
+        await ctx.send(embed=embed)
+
     @commands.Cog.listener()
     async def on_ready(self):
-        webhook = await self.get_webhook()
-        await webhook.send("READY")
+        await self.get_webhook()
+        print("READY")
+
+    async def cog_command_error(self, ctx, error):
+        print("An error occurred in audit: " + str(error))
 
     def c(self, s):
         return s in self.enabled
@@ -535,7 +555,6 @@ class Audit(commands.Cog):
         embed.colour = discord.Colour.green()
         embed.description = f"**:inbox_tray: {member.mention} joined the server**"
         embed.add_field(name="Account creation", value=human_timedelta(member.created_at))
-        embed.add_field(name="Account creation", value=human_timedelta(member.created_at))
         await webhook.send(embed=embed)
 
     @commands.Cog.listener()
@@ -545,6 +564,7 @@ class Audit(commands.Cog):
         webhook = await self.get_webhook()
         embed = self.user_base_embed(member, user_update=True)
         embed.colour = discord.Colour.red()
+        embed.add_field(name="Joined server", value=human_timedelta(member.joined_at))
         embed.description = f"**:outbox_tray: {member.mention} left the server**"
         await webhook.send(embed=embed)
 
@@ -994,7 +1014,7 @@ class Audit(commands.Cog):
                 embed.add_field(name="Slowmode delay", value=f"{bsm} -> {asm}", inline=False)
             if before.is_nsfw() != after.is_nsfw():
                 embed.add_field(name="NSFW", value=f"{'Yes' if before.is_nsfw() else 'No'} -> {'Yes' if after.is_nsfw() else 'No'}", inline=False)
-            if before.is_news() != after.is_news()():
+            if before.is_news() != after.is_news():
                 embed.add_field(name="News", value=f"{'Yes' if before.is_news() else 'No'} -> {'Yes' if after.is_news() else 'No'}", inline=False)
 
         elif isinstance(before, discord.VoiceChannel):

@@ -1,34 +1,106 @@
+"""
+BSD 3-Clause License
+
+Copyright (c) 2020, taku#0621 (Discord)
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+"""
+
+
 import datetime
 from io import BytesIO
 from json import JSONDecodeError
-from aiohttp import ClientResponseError
 from urllib.parse import urlparse
 import re
 import typing
-import asyncio
+from collections import defaultdict
+import pickle
+import os
 
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord.utils import get
 
-from core.time import human_timedelta
-from core.models import PermissionLevel
-from core import checks
+import asyncio
+import aiohttp
+from aiohttp import ClientResponseError
+from dateutil.relativedelta import relativedelta
+
+
+def human_timedelta(dt, *, source=None):
+    if isinstance(dt, relativedelta):
+        delta = relativedelta
+        suffix = ""
+    else:
+        now = source or datetime.datetime.utcnow()
+        if dt >= now:
+            delta = relativedelta(dt, now)
+            suffix = ""
+        else:
+            delta = relativedelta(now, dt)
+            suffix = " ago"
+
+    if delta.microseconds and delta.seconds:
+        delta = delta + relativedelta(seconds=+1)
+
+    attrs = ["years", "months", "days", "hours", "minutes", "seconds"]
+
+    output = []
+    for attr in attrs:
+        elem = getattr(delta, attr)
+        if not elem:
+            continue
+
+        if elem > 1:
+            output.append(f"{elem} {attr}")
+        else:
+            output.append(f"{elem} {attr[:-1]}")
+
+    if not output:
+        return "now"
+    if len(output) == 1:
+        return output[0] + suffix
+    if len(output) == 2:
+        return f"{output[0]} and {output[1]}{suffix}"
+    return f"{output[0]}, {output[1]} and {output[2]}{suffix}"
 
 
 class Audit(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.whname = "Modmail Audit Logger"
-        self._webhook = None
-        self._webhook_lock = asyncio.Lock()
         self.upload_url = f"https://api.cloudinary.com/v1_1/taku/image/upload"
         self.invite_regex = re.compile(
             r"(?:https?://)?(?:www\.)?(?:discord\.(?:gg|io|me|li)|(?:discordapp|discord)\.com/invite)/[\w]+"
         )
-        self.ignored_channel_ids = set()
-        self.ignored_category_ids = set()
-        self.enabled = set()
+        self.whname = "UwUBot Audit Logger"
+        self.acname = "uwubot-audit"
+        self._webhooks = {}
+        self._webhook_locks = {}
 
         self.all = (
             'mute',
@@ -57,55 +129,111 @@ class Audit(commands.Cog):
             'invite create',
             'invite delete'
         )
+        self.whname = "UwUBot Audit Logger"
+        self.acname = "uwubot-audit"
+        self._webhooks = {}
+        self._webhook_locks = {}
+        self.session = aiohttp.ClientSession(loop=self.bot.loop)
+        self.store_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'store.pkl')
+        if os.path.exists(self.store_path):
+            with open(self.store_path, 'rb') as f:
+                try:
+                    self.enabled, self.ignored_channel_ids, self.ignored_category_ids = pickle.load(f)
+                except pickle.UnpicklingError:
+                    self.ignored_channel_ids = defaultdict(set)
+                    self.ignored_category_ids = defaultdict(set)
+                    self.enabled = defaultdict(set)
+        else:
+            self.ignored_channel_ids = defaultdict(set)
+            self.ignored_category_ids = defaultdict(set)
+            self.enabled = defaultdict(set)
+        self.save_pickle.start()
 
-    async def get_webhook(self):
-        async with self._webhook_lock:
-            if self._webhook is not None:
-                return self._webhook
-            self._webhook = get(await self.bot.guild.webhooks(), name=self.whname)
-            if self._webhook is None:
-                channel = self.bot.guild.get_channel("modmail-audit")
-                if not channel:
-                    o = {r: discord.PermissionOverwrite(read_messages=True) for r in self.bot.guild.roles if r.permissions.view_audit_log}
-                    o.update(
-                        {
-                            self.bot.guild.default_role: discord.PermissionOverwrite(read_messages=False, manage_messages=False),
-                            self.bot.guild.me: discord.PermissionOverwrite(read_messages=True)
-                        }
-                    )
-                    channel = await self.bot.guild.create_text_channel(
-                        "modmail-audit", overwrites=o, reason="Modmail Audit Plugin Channel"
-                    )
-                self._webhook = await channel.create_webhook(name=self.whname, avatar=await self.bot.user.avatar_url.read(),
-                                                             reason="Modmail Audit Plugin Webhook")
-            return self._webhook
+    async def send_webhook(self, guild, *args, **kwargs):
+        async with self.webhook_lock(guild.id):
+            wh = self._webhooks.get(guild.id)
+            if wh is not None:
+                try:
+                    return await wh.send(*args, **kwargs)
+                except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                    print(f'Invalid webhook for {guild.name}')
+            wh = get(await guild.webhooks(), name=self.whname)
+            if wh is not None:
+                try:
+                    return await wh.send(*args, **kwargs)
+                except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                    print(f'Invalid webhook for {guild.name}')
+
+            channel = get(guild.channels, name=self.acname)
+            if not channel:
+                o = {r: discord.PermissionOverwrite(read_messages=True)
+                     for r in guild.roles if r.permissions.view_audit_log}
+                o.update(
+                    {
+                        guild.default_role: discord.PermissionOverwrite(read_messages=False,
+                                                                        manage_messages=False),
+                        guild.me: discord.PermissionOverwrite(read_messages=True)
+                    }
+                )
+                channel = await guild.create_text_channel(
+                    self.acname, overwrites=o, reason="Audit Channel"
+                )
+            wh = await channel.create_webhook(name=self.whname,
+                                              avatar=await self.user.avatar_url.read(),
+                                              reason="Audit Webhook")
+            try:
+                return await wh.send(*args, **kwargs)
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                print(f'Failed to send webhook for {guild.name}')
+
+    def webhook_lock(self, guild_id):
+        lock = self._webhook_locks.get(guild_id)
+        if lock is None:
+            self._webhook_locks[guild_id] = lock = asyncio.Lock()
+        return lock
+
+    def _save_pickle(self):
+        print('saving pickle')
+        with open(self.store_path, 'wb') as f:
+            try:
+                pickle.dump((self.enabled, self.ignored_channel_ids, self.ignored_category_ids), f)
+            except pickle.PickleError:
+                print('Failed to save pickle')
+
+    def cog_unload(self):
+        self._save_pickle()
+        self.save_pickle.cancel()
+
+    @tasks.loop(minutes=15)
+    async def save_pickle(self):
+        self._save_pickle()
 
     @commands.group()
-    @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
+    @commands.has_permissions(administrator=True)
     async def audit(self, ctx):
         """Audit logs, copied from mee6."""
 
     @audit.command()
-    @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
+    @commands.has_permissions(administrator=True)
     async def ignore(self, ctx, *, channel: typing.Union[discord.TextChannel, discord.VoiceChannel, discord.CategoryChannel]):
         """Ignore a channel or category from audit logs."""
         if isinstance(channel, discord.CategoryChannel):
-            self.ignored_category_ids.add(channel.id)
+            self.ignored_category_ids[ctx.guild.id].add(channel.id)
         else:
-            self.ignored_channel_ids.add(channel.id)
+            self.ignored_channel_ids[ctx.guild.id].add(channel.id)
         embed = discord.Embed(description="Ignored!", colour=discord.Colour.green())
         await ctx.send(embed=embed)
 
     @audit.command()
-    @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
+    @commands.has_permissions(administrator=True)
     async def unignore(self, ctx, *,
                        channel: typing.Union[discord.TextChannel, discord.VoiceChannel, discord.CategoryChannel]):
         """Unignore a channel or category from audit logs."""
         try:
             if isinstance(channel, discord.CategoryChannel):
-                self.ignored_category_ids.remove(channel.id)
+                self.ignored_category_ids[ctx.guild.id].remove(channel.id)
             else:
-                self.ignored_channel_ids.remove(channel.id)
+                self.ignored_channel_ids[ctx.guild.id].remove(channel.id)
         except KeyError:
             embed = discord.Embed(description="Already not ignored!", colour=discord.Colour.red())
         else:
@@ -113,59 +241,57 @@ class Audit(commands.Cog):
         await ctx.send(embed=embed)
 
     @audit.command()
-    @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
-    async def enable(self, ctx, *, audit_type: str.lower):
+    @commands.has_permissions(administrator=True)
+    async def enable(self, ctx, *, audit_type: str.lower = None):
         """Enable a specific audit type, use "all" to enable all."""
+        if audit_type is None:
+            embed = discord.Embed(description="**List of all audit types:**\n\n" + '\n'.join(sorted(self.all)),
+                                  colour=discord.Colour.green())
+            return await ctx.send(embed=embed)
+
         audit_type = audit_type.replace('_', ' ')
         if audit_type == 'all':
             embed = discord.Embed(description="Enabled all audits!", colour=discord.Colour.green())
-            self.enabled = set(self.all)
+            self.enabled[ctx.guild.id] = set(self.all)
         elif audit_type not in self.all:
             embed = discord.Embed(description="Invalid audit type!", colour=discord.Colour.red())
             embed.add_field(name="Valid audit types", value=', '.join(self.all))
         elif audit_type in self.enabled:
             embed = discord.Embed(description="Already enabled!", colour=discord.Colour.red())
         else:
-            self.enabled.add(audit_type)
+            self.enabled[ctx.guild.id].add(audit_type)
             embed = discord.Embed(description="Enabled!", colour=discord.Colour.green())
         await ctx.send(embed=embed)
 
     @audit.command()
-    @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
+    @commands.has_permissions(administrator=True)
     async def disable(self, ctx, *, audit_type: str.lower):
         """Disable a specific audit type, use "all" to disable all."""
         audit_type = audit_type.replace('_', ' ')
         if audit_type == 'all':
             embed = discord.Embed(description="Disabled all audits!", colour=discord.Colour.green())
-            self.enabled = set()
+            self.enabled[ctx.guild.id] = set()
         elif audit_type not in self.all:
             embed = discord.Embed(description="Invalid audit type!", colour=discord.Colour.red())
             embed.add_field(name="Valid audit types", value=', '.join(self.all))
         elif audit_type not in self.enabled:
             embed = discord.Embed(description="Not enabled!", colour=discord.Colour.red())
         else:
-            self.enabled.remove(audit_type)
+            self.enabled[ctx.guild.id].remove(audit_type)
             embed = discord.Embed(description="Disabled!", colour=discord.Colour.green())
         await ctx.send(embed=embed)
-
-    @audit.command()
-    @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
-    async def resetwh(self, ctx):
-        """Resets the webhook, if you deleted the webhook or audit channel."""
-        self._webhook = None
-        embed = discord.Embed(description="Reset!", colour=discord.Colour.green())
-        await ctx.send(embed=embed)
-
-    @commands.Cog.listener()
-    async def on_ready(self):
-        await self.get_webhook()
-        print("READY")
 
     async def cog_command_error(self, ctx, error):
         print("An error occurred in audit: " + str(error))
 
-    def c(self, s):
-        return s in self.enabled
+    def c(self, type, guild, channel=None):
+        if channel is not None:
+            if channel.id in self.ignored_channel_ids[guild.id]:
+                return False
+            if getattr(channel, 'category', None) is not None:
+                if channel.category.id in self.ignored_category_ids[guild.id]:
+                    return False
+        return type in self.enabled[guild.id]
 
     @staticmethod
     def user_base_embed(user, url=discord.embeds.EmptyEmbed, user_update=False):
@@ -183,10 +309,10 @@ class Audit(commands.Cog):
         content = {
             'file': url,
             'upload_preset': 'audits',
-            'public_id': f'audits/{self.bot.user.id}/{type}/{id}/{filename}'
+            'public_id': f'audits/uwu/{self.bot.user.id}/{type}/{id}/{filename}'
         }
         try:
-            async with self.bot.session.post(self.upload_url, json=content, raise_for_status=True) as r:
+            async with self.session.post(self.upload_url, json=content, raise_for_status=True) as r:
                 return (await r.json())['secure_url']
         except (JSONDecodeError, ClientResponseError, KeyError):
             return None
@@ -195,9 +321,7 @@ class Audit(commands.Cog):
     async def on_message(self, message):
         if message.author.bot:
             return
-        if message.channel.id in self.ignored_channel_ids or getattr(message.channel.category, 'id', None) in self.ignored_category_ids:
-            return
-        if not self.c('invites'):
+        if not self.c('invites', message.guild, message.channel):
             return
 
         invites = self.invite_regex.findall(message.content)
@@ -216,14 +340,12 @@ class Audit(commands.Cog):
         else:
             embed.description = f"**:envelope_with_arrow: {message.author.mention} sent multiple invites in #{message.channel}**\n\n"
         embed.description += '\n'.join(invites)
-        webhook = await self.get_webhook()
-        await webhook.send(embed=embed)
+        await self.send_webhook(message.guild, embed=embed)
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
         # mute, unmute, deaf, undeaf
         async def send_embed(text, status_on):
-            webhook = await self.get_webhook()
             embed = self.user_base_embed(member)
             if status_on:
                 embed.description = f"**:loud_sound: {member.mention} was {text}**"
@@ -231,31 +353,30 @@ class Audit(commands.Cog):
             else:
                 embed.description = f"**:mute: {member.mention} was {text}**"
                 embed.colour = discord.Colour.red()
-            return await webhook.send(embed=embed)
+            return await self.send_webhook(member.guild, embed=embed)
 
-        if self.c('mute'):
+        if self.c('mute', member.guild):
             if not before.mute and after.mute:
                 await send_embed('muted', False)
-        if self.c('unmute'):
+        if self.c('unmute', member.guild):
             if before.mute and not after.mute:
                 await send_embed('unmuted', True)
-        if self.c('deaf'):
+        if self.c('deaf', member.guild):
             if not before.deaf and after.deaf:
                 await send_embed('deafened', False)
-        if self.c('undeaf'):
+        if self.c('undeaf', member.guild):
             if before.deaf and not after.deaf:
                 await send_embed('undeafened', True)
 
     @commands.Cog.listener()
     async def on_raw_message_edit(self, payload):
         # message update
-        if not self.c('message update'):
+        channel = self.bot.get_channel(payload.channel_id)
+        if channel is None or not hasattr(channel, 'guild'):
             return
-        channel = self.bot.guild.get_channel(payload.channel_id)
-        if channel is None:
+        if not self.c('message update', channel.guild, channel):
             return
-        if channel.id in self.ignored_channel_ids or getattr(channel.category, 'id', None) in self.ignored_category_ids:
-            return
+
         try:
             message = await channel.fetch_message(payload.message_id)
         except discord.NotFound:
@@ -345,41 +466,36 @@ class Audit(commands.Cog):
                 else:
                     embed.add_field(name="Pinned", value="`false`")
 
-        webhook = await self.get_webhook()
-
         if send_embed2:
             embed.colour = discord.Colour.light_grey()
             embed2.colour = discord.Colour.dark_grey()
-            embed.description = "**:pencil: Message updated (__before__):**\n\n" + \
+            embed.description = f"**:pencil: Message updated in {channel.mention} (__before__):**\n\n" + \
                                 (embed.description if len(embed.description) else '')
-            embed2.description = "**:pencil: Message updated (__after__):**\n\n" + \
+            embed2.description = f"**:pencil: Message updated in {channel.mention} (__after__):**\n\n" + \
                                  (embed2.description if len(embed2.description) else '')
         elif send_embed:
             embed.colour = discord.Colour.gold()
-            embed.description = "**:pencil: Message updated:**\n\n" + \
+            embed.description = f"**:pencil: Message updated in {channel.mention}:**\n\n" + \
                                 (embed.description if len(embed.description) else '')
         else:
             embed.colour = discord.Colour.gold()
-            embed.description = "**:pencil: Message updated: *No change detected*.**"
+            embed.description = f"**:pencil: Message updated in {channel.mention}: *No change detected*.**"
 
         if send_embed2:
-            await webhook.send(embeds=[embed, embed2], files=files)
+            await self.send_webhook(channel.guild, embeds=[embed, embed2], files=files)
         else:
-            await webhook.send(embed=embed, files=files)
+            await self.send_webhook(channel.guild, embed=embed, files=files)
 
         for file in files:
             file.fp.close()
 
     @commands.Cog.listener()
     async def on_message_delete(self, message):
-        if message.guild != self.bot.guild or message.author.bot:
-            return
-
-        if message.channel.id in self.ignored_channel_ids or getattr(message.channel.category, 'id', None) in self.ignored_category_ids:
+        if message.author.bot:
             return
 
         # message delete
-        if not self.c('message delete'):
+        if not self.c('message delete', message.guild, message.channel):
             return
 
         embed = self.user_base_embed(message.author)
@@ -421,21 +537,16 @@ class Audit(commands.Cog):
         embed2.timestamp = datetime.datetime.utcnow()
         embed2.set_footer(text=f"Channel ID: {message.channel.id} & deleted on")
         embed2.colour = discord.Colour.red()
-        webhook = await self.get_webhook()
-        await webhook.send(embeds=[embed, embed2], files=files)
+        await self.send_webhook(message.guild, embeds=[embed, embed2], files=files)
 
     @commands.Cog.listener()
     async def on_raw_bulk_message_delete(self, payload):
-        if payload.guild_id != self.bot.guild_id:
+        channel = self.bot.get_channel(payload.channel_id)
+        if not channel or not hasattr(channel, 'guild'):
             return
 
         # message purge
-        if not self.c('message purge'):
-            return
-        channel = self.bot.guild.get_channel(payload.channel_id)
-        if not channel:
-            return
-        if channel.id in self.ignored_channel_ids or getattr(channel.category, 'id', None) in self.ignored_category_ids:
+        if not self.c('message purge', channel.guild, channel):
             return
 
         messages = sorted(payload.cached_messages, key=lambda msg: msg.created_at)
@@ -480,14 +591,13 @@ class Audit(commands.Cog):
         embed.timestamp = datetime.datetime.utcnow()
 
         try:
-            async with self.bot.session.post('https://hasteb.in/documents', data=upload_text) as resp:
+            async with self.session.post('https://hasteb.in/documents', data=upload_text) as resp:
                 key = (await resp.json())["key"]
                 embed.add_field(name="Recovered URL", value=f"https://hasteb.in/{key}.txt")
         except (JSONDecodeError, ClientResponseError, IndexError):
             pass
 
-        webhook = await self.get_webhook()
-        await webhook.send(embed=embed)
+        await self.send_webhook(channel.guild, embed=embed)
 
     @commands.Cog.listener()
     async def on_member_update(self, before, after):
@@ -497,30 +607,28 @@ class Audit(commands.Cog):
             e.description = desc
             return e
 
-        if self.c('member nickname'):
+        if self.c('member nickname', after.guild):
             if before.nick != after.nick:
-                webhook = await self.get_webhook()
                 embed = get_embed(f"**:pencil: {after.mention} nickname edited**")
                 embed.add_field(name='Old nickname', value=f"`{before.nick}`")
                 embed.add_field(name='New nickname', value=f"`{after.nick}`")
-                await webhook.send(embed=embed)
+                await self.send_webhook(after.guild, embed=embed)
 
-        if self.c('member roles'):
+        if self.c('member roles', after.guild):
             removed_roles = sorted(set(before.roles) - set(after.roles), key=lambda r: r.position, reverse=True)
             added_roles = sorted(set(after.roles) - set(before.roles), key=lambda r: r.position, reverse=True)
 
             if added_roles or removed_roles:
-                webhook = await self.get_webhook()
                 embed = get_embed(f"**:crossed_swords: {after.mention} roles have changed**")
                 if added_roles:
                     embed.add_field(name='Added roles', value=f"{' '.join('``' + r.name + '``' for r in added_roles)}", inline=False)
                 if removed_roles:
                     embed.add_field(name='Removed roles', value=f"{' '.join('``' + r.name + '``' for r in removed_roles)}", inline=False)
-                await webhook.send(embed=embed)
+                await self.send_webhook(after.guild, embed=embed)
 
     @commands.Cog.listener()
     async def on_user_update(self, before, after):
-        if not self.c('user update'):
+        if not self.c('user update', after.guild):
             return
 
         embed = self.user_base_embed(after, user_update=True)
@@ -528,75 +636,60 @@ class Audit(commands.Cog):
         embed.description = f"**:crossed_swords: {after.mention} updated their profile**"
 
         if before.avatar != after.avatar:
-            webhook = await self.get_webhook()
             before_url = await self.upload_img(after.id, 'avatar', before.avatar_url)
             if not before_url:
                 before_url = str(before.avatar_url)
             embed._author['icon_url'] = before_url
             embed.add_field(name="Avatar", value=f"[[before]]({before_url}) -> [[after]]({after.avatar_url})")
-            await webhook.send(embed=embed)
 
         if before.discriminator != after.discriminator:
-            webhook = await self.get_webhook()
             embed.add_field(name="Discriminator", value=f"`#{before.discriminator}` -> `#{after.discriminator}`")
-            await webhook.send(embed=embed)
 
         if before.name != after.name:
-            webhook = await self.get_webhook()
             embed.add_field(name="Name", value=f"`{before.name}` -> `{after.name}`")
-            await webhook.send(embed=embed)
+        await self.send_webhook(after.guild, embed=embed)
 
     @commands.Cog.listener()
     async def on_member_join(self, member):
-        if not self.c('member join'):
+        if not self.c('member join', member.guild):
             return
-        webhook = await self.get_webhook()
         embed = self.user_base_embed(member, user_update=True)
         embed.colour = discord.Colour.green()
         embed.description = f"**:inbox_tray: {member.mention} joined the server**"
         embed.add_field(name="Account creation", value=human_timedelta(member.created_at))
-        await webhook.send(embed=embed)
+        await self.send_webhook(member.guild, embed=embed)
 
     @commands.Cog.listener()
     async def on_member_leave(self, member):
-        if not self.c('member leave'):
+        if not self.c('member leave', member.guild):
             return
-        webhook = await self.get_webhook()
         embed = self.user_base_embed(member, user_update=True)
         embed.colour = discord.Colour.red()
         embed.add_field(name="Joined server", value=human_timedelta(member.joined_at))
         embed.description = f"**:outbox_tray: {member.mention} left the server**"
-        await webhook.send(embed=embed)
+        await self.send_webhook(member.guild, embed=embed)
 
     @commands.Cog.listener()
     async def on_member_ban(self, guild, user):
-        if guild != self.bot.guild:
+        if not self.c('member ban', guild):
             return
-        if not self.c('member ban'):
-            return
-        webhook = await self.get_webhook()
         embed = self.user_base_embed(user, user_update=True)
         embed.colour = discord.Colour.red()
         embed.description = f"**:man_police_officer: :lock: {user.mention} was banned**"
-        await webhook.send(embed=embed)
+        await self.send_webhook(guild, embed=embed)
 
     @commands.Cog.listener()
     async def on_member_unban(self, guild, user):
-        if guild != self.bot.guild:
+        if not self.c('member unban', guild):
             return
-        if not self.c('member unban'):
-            return
-        webhook = await self.get_webhook()
         embed = self.user_base_embed(user, user_update=True)
         embed.colour = discord.Colour.green()
         embed.description = f"**:man_police_officer: :unlock: {user.mention} was unbanned**"
-        await webhook.send(embed=embed)
+        await self.send_webhook(guild, embed=embed)
 
     @commands.Cog.listener()
     async def on_guild_role_create(self, role):
-        if role.guild != self.bot.guild:
-            return
-        if not self.c('role create'):
+        if not self.c('role create', role.guild):
             return
         embed = discord.Embed()
         embed.description = f"**:crossed_swords: Role created: {role.name}**"
@@ -613,14 +706,11 @@ class Audit(commands.Cog):
                        for p, v in (role.permissions
                                     if not role.permissions.administrator else discord.Permissions.all()) if v)
             ), inline=False)
-        webhook = await self.get_webhook()
-        await webhook.send(embed=embed)
+        await self.send_webhook(role.guild, embed=embed)
 
     @commands.Cog.listener()
     async def on_guild_role_update(self, before, after):
-        if after.guild != self.bot.guild:
-            return
-        if not self.c('role update'):
+        if not self.c('role update', after.guild):
             return
         embed = discord.Embed()
         if after.is_default():
@@ -661,14 +751,11 @@ class Audit(commands.Cog):
             ), inline=False)
         if len(embed.fields) == 0:
             return
-        webhook = await self.get_webhook()
-        await webhook.send(embed=embed)
+        await self.send_webhook(after.guild, embed=embed)
 
     @commands.Cog.listener()
     async def on_guild_role_delete(self, role):
-        if role.guild != self.bot.guild:
-            return
-        if not self.c('role delete'):
+        if not self.c('role delete', role.guild):
             return
 
         embed = discord.Embed()
@@ -689,8 +776,8 @@ class Audit(commands.Cog):
                 sorted(p.replace('_', ' ').replace('administrator', '**administrator**')
                        for p, v in role.permissions if v)
             ), inline=False)
-        webhook = await self.get_webhook()
-        await webhook.send(embed=embed)
+
+        await self.send_webhook(role.guild, embed=embed)
 
     def get_region_flag(self, name):
         if isinstance(name, str):
@@ -726,9 +813,7 @@ class Audit(commands.Cog):
 
     @commands.Cog.listener()
     async def on_guild_update(self, before, after):
-        if after != self.bot.guild:
-            return
-        if not self.c('server edited'):
+        if not self.c('server edited', after):
             return
         embed = discord.Embed()
         embed.description = f"**:pencil: Server information updated!**"
@@ -808,14 +893,11 @@ class Audit(commands.Cog):
         if len(embed.fields) == 0:
             return
 
-        webhook = await self.get_webhook()
-        await webhook.send(embed=embed)
+        await self.send_webhook(after, embed=embed)
 
     @commands.Cog.listener()
     async def on_guild_emojis_update(self, guild, before, after):
-        if guild != self.bot.guild:
-            return
-        if not self.c('server emoji'):
+        if not self.c('server emoji', guild):
             return
 
         removed_emojis = set(before) - set(after)
@@ -847,16 +929,11 @@ class Audit(commands.Cog):
         if len(embed.fields) == 0:
             return
 
-        webhook = await self.get_webhook()
-        await webhook.send(embed=embed)
+        await self.send_webhook(guild, embed=embed)
 
     @commands.Cog.listener()
     async def on_guild_channel_create(self, channel):
-        if channel.guild != self.bot.guild:
-            return
-        if getattr(channel.category, 'id', None) in self.ignored_category_ids:
-            return
-        if not self.c('channel create'):
+        if not self.c('channel create', channel.guild, channel):
             return
         embed = discord.Embed()
         embed.colour = discord.Colour.green()
@@ -879,8 +956,7 @@ class Audit(commands.Cog):
             else:
                 embed.set_footer(text=f'Channel ID: {channel.id}')
 
-        webhook = await self.get_webhook()
-        await webhook.send(embed=embed)
+        await self.send_webhook(channel.guild, embed=embed)
 
         if channel.overwrites and not channel.permissions_synced:
             await self.on_guild_channel_perms_update(None, channel)
@@ -904,7 +980,6 @@ class Audit(commands.Cog):
             embed.description = f"**:crossed_swords: Category permissions updated: `{after.name}`**"
             ft = f'Category ID: {after.id}'
 
-        webhook = await self.get_webhook()
         before_overwrites = before.overwrites if before is not None else {}
         for user_or_role in set(before_overwrites) | set(after.overwrites):
             b_overwrites = before_overwrites.get(user_or_role)
@@ -976,15 +1051,11 @@ class Audit(commands.Cog):
                     sorted(p.replace('_', ' ') for p in denied_perm)
                 ), inline=False)
 
-            await webhook.send(embed=e)
+            await self.send_webhook(after.guild, embed=e)
 
     @commands.Cog.listener()
     async def on_guild_channel_update(self, before, after):
-        if after.guild != self.bot.guild:
-            return
-        if after.id in self.ignored_channel_ids or getattr(after.category, 'id', None) in self.ignored_category_ids:
-            return
-        if not self.c('channel update'):
+        if not self.c('channel update', after.guild, after):
             return
 
         embed = discord.Embed()
@@ -1038,18 +1109,13 @@ class Audit(commands.Cog):
             embed.set_footer(text=f'Channel ID: {after.id}')
 
         if len(embed.fields) > 0:
-            webhook = await self.get_webhook()
-            await webhook.send(embed=embed)
+            await self.send_webhook(after, embed=embed)
 
         await self.on_guild_channel_perms_update(before, after)
 
     @commands.Cog.listener()
     async def on_guild_channel_delete(self, channel):
-        if channel.guild != self.bot.guild:
-            return
-        if channel.id in self.ignored_channel_ids or getattr(channel.category, 'id', None) in self.ignored_category_ids:
-            return
-        if not self.c('channel delete'):
+        if not self.c('channel delete', channel.guild, channel):
             return
 
         embed = discord.Embed()
@@ -1075,17 +1141,16 @@ class Audit(commands.Cog):
             else:
                 embed.set_footer(text=f'Channel ID: {channel.id}')
 
-        webhook = await self.get_webhook()
-        await webhook.send(embed=embed)
+        await self.send_webhook(channel.guild, embed=embed)
 
     @commands.Cog.listener()
     async def on_invite_create(self, invite):
-        if invite.guild.id != self.bot.guild_id:
+        if invite.guild is None:
             return
-        if not self.c('invite create'):
+
+        if not self.c('invite create', invite.guild, invite.channel):
             return
-        if invite.channel.id in self.ignored_channel_ids or getattr(getattr(invite.channel, 'category', None), 'id', None) in self.ignored_category_ids:
-            return
+
         embed = self.user_base_embed(invite.inviter)
         embed.colour = discord.Colour.green()
         embed.timestamp = invite.created_at
@@ -1096,19 +1161,23 @@ class Audit(commands.Cog):
             embed.set_footer(text=f"Inviter ID: {invite.inviter.id} | Channel ID: {invite.channel.id}")
         else:
             embed.set_footer(text=f"Inviter ID: {invite.inviter.id}")
-        # TODO: Better max age time format
-        embed.add_field(name="Expires after", value="Never" if invite.max_age == 0 else str(invite.max_age) + " seconds")
+        if invite.max_age == 0:
+            inv_text = 'Never'
+        else:
+            inv_text = human_timedelta(relativedelta(seconds=invite.max_age))
+        embed.add_field(name="Expires after", value=inv_text)
         embed.add_field(name="Max uses", value="Unlimited" if invite.max_age == 0 else str(invite.max_age))
-        embed.add_field(name="Temporary membership", value=f"`{'Yes' if invite.temporary else 'No'}`")
+        if invite.temporary:
+            embed.add_field(name="Temporary membership", value=f"`Yes`")
 
-        webhook = await self.get_webhook()
-        await webhook.send(embed=embed)
+        await self.send_webhook(invite.guild, embed=embed)
 
     @commands.Cog.listener()
     async def on_invite_delete(self, invite):
-        if invite.guild.id != self.bot.guild_id:
+        if invite.guild is None:
             return
-        if not self.c('invite delete'):
+
+        if not self.c('invite delete', invite.guild, invite.channel):
             return
         if invite.inviter:
             embed = self.user_base_embed(invite.inviter)
@@ -1119,8 +1188,7 @@ class Audit(commands.Cog):
         embed.timestamp = datetime.datetime.utcnow()
         embed.description = f"**:wastebasket: An invite has been deleted**"
         embed.add_field(name="Code", value=f"[**{invite.code}**]({invite.url})")
-        webhook = await self.get_webhook()
-        await webhook.send(embed=embed)
+        await self.send_webhook(invite.guild, embed=embed)
 
 
 def setup(bot):

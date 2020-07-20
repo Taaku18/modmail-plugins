@@ -129,10 +129,7 @@ class Audit(commands.Cog):
             'invite create',
             'invite delete'
         )
-        self.whname = "UwUBot Audit Logger"
-        self.acname = "uwubot-audit"
-        self._webhooks = {}
-        self._webhook_locks = {}
+
         self.session = aiohttp.ClientSession(loop=self.bot.loop)
         self.store_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'store.pkl')
         if os.path.exists(self.store_path):
@@ -179,7 +176,7 @@ class Audit(commands.Cog):
                     self.acname, overwrites=o, reason="Audit Channel"
                 )
             wh = await channel.create_webhook(name=self.whname,
-                                              avatar=await self.user.avatar_url.read(),
+                                              avatar=await self.bot.user.avatar_url.read(),
                                               reason="Audit Webhook")
             try:
                 return await wh.send(*args, **kwargs)
@@ -319,7 +316,7 @@ class Audit(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        if message.author.bot:
+        if message.author.bot or not message.guild:
             return
         if not self.c('invites', message.guild, message.channel):
             return
@@ -491,7 +488,7 @@ class Audit(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message_delete(self, message):
-        if message.author.bot:
+        if message.author.bot or not message.guild:
             return
 
         # message delete

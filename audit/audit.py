@@ -963,7 +963,8 @@ class Audit(commands.Cog):
         if channel.overwrites and not channel.permissions_synced:
             await self.on_guild_channel_perms_update(None, channel)
 
-    async def on_guild_channel_perms_update(self, before, after):
+    async def on_guild_channel_perms_update(self, before: typing.Optional[discord.abc.GuildChannel],
+                                            after: discord.abc.GuildChannel):
         if before is None:
             if after.permissions_synced:
                 return
@@ -1111,7 +1112,7 @@ class Audit(commands.Cog):
             embed.set_footer(text=f'Channel ID: {after.id}')
 
         if len(embed.fields) > 0:
-            await self.send_webhook(after, embed=embed)
+            await self.send_webhook(after.guild, embed=embed)
 
         await self.on_guild_channel_perms_update(before, after)
 

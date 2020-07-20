@@ -623,9 +623,8 @@ class Audit(commands.Cog):
                     embed.add_field(name='Removed roles', value=f"{' '.join('``' + r.name + '``' for r in removed_roles)}", inline=False)
                 await self.send_webhook(after.guild, embed=embed)
 
-    @commands.Cog.listener()
-    async def on_user_update(self, before, after):
-        if not self.c('user update', after.guild):
+    async def _user_update(self, guild, before, after):
+        if not self.c('user update', guild):
             return
 
         embed = self.user_base_embed(after, user_update=True)
@@ -644,7 +643,13 @@ class Audit(commands.Cog):
 
         if before.name != after.name:
             embed.add_field(name="Name", value=f"`{before.name}` -> `{after.name}`")
-        await self.send_webhook(after.guild, embed=embed)
+        await self.send_webhook(guild, embed=embed)
+
+    @commands.Cog.listener()
+    async def on_user_update(self, before, after):
+        for guild in self.bot.guilds:
+            if guild.get_member(after.id):
+                await self._user_update(guild, before, after)
 
     @commands.Cog.listener()
     async def on_member_join(self, member):

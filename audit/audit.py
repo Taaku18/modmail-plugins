@@ -323,8 +323,8 @@ class Audit(commands.Cog):
 
         invites = self.invite_regex.findall(message.content)
         for embed in message.embeds:
-            if len(embed.content):
-                invites.extend(self.invite_regex.findall(embed.content))
+            if len(embed.description):
+                invites.extend(self.invite_regex.findall(embed.description))
             for field in embed.fields:
                 invites.extend(self.invite_regex.findall(field.value))
         if not invites:
@@ -385,7 +385,7 @@ class Audit(commands.Cog):
 
         embed = self.user_base_embed(message.author, message.jump_url)
         embed.set_footer(text=f"Message ID: {payload.message_id} | Channel ID: {payload.channel_id}")
-        embed.timestamp = message.edited_at
+        embed.timestamp = message.edited_at or datetime.datetime.utcnow()
         files = []
         embed2 = None
         send_embed = False

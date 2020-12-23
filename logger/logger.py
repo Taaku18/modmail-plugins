@@ -494,7 +494,7 @@ class Logger(commands.Cog):
             channel_text = 'deleted-channel'
 
         try:
-            async with self.bot.session.post('https://hasteb.in/documents', data=upload_text) as resp:
+            async with self.bot.session.post('https://hastebin.cc/documents', data=upload_text) as resp:
                 key = (await resp.json())["key"]
                 return await channel.send(embed=self.make_embed(
                     f'{len(message_ids)} message{pl} deleted from #{channel_text}.',

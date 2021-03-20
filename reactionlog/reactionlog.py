@@ -126,7 +126,7 @@ class ReactionLogger(commands.Cog):
             emoji_text = str(emoji)
 
         embed = discord.Embed(
-            description=f"**Message:** [Jump!](https://discord.com/channels/{channel.guild.id}/{channel.id}/{message.id}) ({channel.mention})\n",
+            description=f"**Message:** [Jump!](https://discord.com/channels/{channel.guild.id}/{channel.id}/{message.id}) {channel.mention}\n",
             colour=0xffd1df,
         )
         embed.timestamp = datetime.datetime.utcnow()

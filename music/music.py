@@ -46,7 +46,6 @@ from base64 import b64decode
 from collections import defaultdict
 
 import lavalink
-import dotenv
 
 import discord
 from discord import AllowedMentions
@@ -57,12 +56,12 @@ from ._music import *
 from core import checks
 from core.models import getLogger, PermissionLevel
 
-dotenv.load_dotenv()
 
 logger = getLogger(__name__)
 logger.spam = lambda *args, **kwargs: None
-# noinspection PyUnboundLocalVariable
 MUSIC_STATE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "music-states")
+if not os.path.exists(MUSIC_STATE_PATH):
+    os.mkdir(MUSIC_STATE_PATH)
 
 
 class Music(commands.Cog):

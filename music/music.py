@@ -526,7 +526,7 @@ class Music(commands.Cog):
                     {'$set': {'genius_token': GENIUS_TOKEN}},
                     upsert=True
                 )
-            return await m.edit("Successfully set and enabled genius lyrics!")
+            return await m.edit(content="Successfully set and enabled genius lyrics!")
         elif type == 'api':
             import secrets
             BOT_ID = int(b64decode(self.bot.token.split(".")[0]).decode())
@@ -1258,7 +1258,7 @@ class Music(commands.Cog):
         else:
             player.repeat = None
             message = "Looping is now **disabled**."
-        await ctx.send(ctx, embed=discord.Embed(description=message, colour=self.bot.main_color))
+        await ctx.send(embed=discord.Embed(description=message, colour=self.bot.main_color))
 
     @commands.cooldown(1, 2)
     @commands.bot_has_permissions(send_messages=True, embed_links=True)

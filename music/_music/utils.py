@@ -242,7 +242,7 @@ class PaginatorSession:
             await self.base.add_reaction(reaction)
 
     async def _create_base(self, item) -> None:
-        self.base = await self.ctx.bot.send(self.destination, item, allowed_mentions=discord.AllowedMentions.none())
+        self.base = await self.destination.send(item, allowed_mentions=discord.AllowedMentions.none())
 
     async def show_page(self, index: int) -> None:
         if not 0 <= index < len(self.pages):
@@ -365,7 +365,7 @@ class EmbedPaginatorSession(PaginatorSession):
             raise TypeError("Page must be an Embed object.")
 
     async def _create_base(self, item: discord.Embed) -> None:
-        self.base = await self.ctx.bot.send(self.destination, embed=item)
+        self.base = await self.destination.send(embed=item)
 
     async def _show_page(self, page):
         await self.base.edit(embed=page)

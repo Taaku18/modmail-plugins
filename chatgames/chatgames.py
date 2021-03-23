@@ -8,7 +8,6 @@ import os
 import random
 import itertools
 import collections
-import datetime
 
 import discord
 from discord.ext import commands
@@ -44,27 +43,41 @@ class ChatGames(commands.Cog):
     def next_wait(self):
         if self._min_how_often == self._max_how_often:
             return self._min_how_often * 60
-        return random.uniform(self._max_how_often * 60, self._max_how_often * 60)
+        return random.uniform(self._min_how_often * 60, self._max_how_often * 60)
 
     async def cog_load(self):
         config = await self.db.find_one({'_id': 'chatgames-config'})
         if config:
+            version = config.get('version')
+            if version != 2:
+                await self.db.delete_one({'_id': 'chatgames-config'})
+                await self.db.find_one_and_update(
+                    {'_id': 'chatgames-config'},
+                    {'$set': {'version': 2}},
+                    upsert=True
+                )
             min_how_often = config.get('min_how_often') or self._min_how_often
             max_how_often = config.get('max_how_often') or self._max_how_often
-            timeout = config.get('timeout') or self.timeout
-            if not timeout / 60 + 0.2 < min_how_often <= max_how_often:
+            if not 0.2 <= min_how_often <= max_how_often:
                 await self.db.find_one_and_update(
                     {'_id': 'chatgames-config'},
                     {'$set': {'min_how_often': None,
-                              'max_how_often': None,
-                              'timeout': None}},
+                              'max_how_often': None}},
                     upsert=True
                 )
             else:
                 self._min_how_often = min_how_often
                 self._max_how_often = max_how_often
-                self.timeout = timeout
 
+            timeout = config.get('timeout') or self.timeout
+            if timeout < 1:
+                await self.db.find_one_and_update(
+                    {'_id': 'chatgames-config'},
+                    {'$set': {'timeout': None}},
+                    upsert=True
+                )
+            else:
+                self.timeout = timeout
             enabled_channels = config.get('enabled')
             if enabled_channels:
                 self.enabled_channels = {c: None for c in enabled_channels}
@@ -73,39 +86,46 @@ class ChatGames(commands.Cog):
                 event = asyncio.Event()
                 self.enabled_channels[channel_id] = (self.bot.loop.call_later(self.next_wait,
                                                                              lambda c=channel_id, e=event: asyncio.create_task(
-                                                                                 self.do_event(channel_id, e))), event)
+                                                                                 self.do_event(c, e))), event)
+        else:
+            await self.db.find_one_and_update(
+                {'_id': 'chatgames-config'},
+                {'$set': {'version': 2}},
+                upsert=True
+            )
 
     def cog_unload(self):
         for channel_id in self.enabled_channels:
             if self.enabled_channels[channel_id]:
-                self.enabled_channels[channel_id][0].cancel()
+                if self.enabled_channels[channel_id][0]:
+                    self.enabled_channels[channel_id][0].cancel()
                 self.enabled_channels[channel_id][1].set()
 
-    def _do_event_unscrabble(self, channel):
+    def _do_event_unscramble(self, channel):
         recent_words = self._recent_words[channel.id]
-        scrabbled_word = word = random.choice([w for w in WORDLIST if w not in recent_words])
-        while scrabbled_word == word:
+        scrambled_word = word = random.choice([w for w in WORDLIST if w not in recent_words])
+        while scrambled_word == word:
             list_word = list(word)
             random.shuffle(list_word)
-            scrabbled_word = ''.join(list_word)
+            scrambled_word = ''.join(list_word)
         embed = discord.Embed(
-            description=f"**Unscrabble!**\n\nUnscrabble: `{scrabbled_word}`",
+            description=f"**Unscramble!**\n\nUnscramble: `{scrambled_word}`",
             colour=self.bot.main_color
         )
         answer_embed = discord.Embed(
-            description=f"**Unscrabble!**\n\nUnscrabble: `{scrabbled_word}`\nSolution: `{word}`",
+            description=f"**Unscramble!**\n\nUnscramble: `{scrambled_word}`\nSolution: `{word}`",
             colour=self.bot.main_color
         )
-        return embed, word.casefold(), answer_embed
+        return embed, word.casefold(), answer_embed, scrambled_word
 
     def _do_event_quickmath(self):
-        num_operands = random.choices([2, 3, 4, 5], [70, 20, 8, 2], k=1)[0]
+        num_operands = random.choices([2, 3, 4, 5], [60, 25, 13, 2], k=1)[0]
         operations = random.choices(['+', '-', '*'], k=num_operands-1)
-        operands = random.choices(range(0, 20), k=num_operands)
+        operands = random.choices(range(0, 25), k=num_operands)
         equation = list(itertools.chain.from_iterable(itertools.zip_longest(operands, operations)))[:-1]
         for i, node in enumerate(equation):
             if node == '*':
-                if equation[i-1] > 10 and equation[i+1] > 10:
+                if equation[i-1] > 14 and equation[i+1] > 14:
                     if random.randint(1, 2) == 1:
                         equation[i-1] -= 10
                     else:
@@ -134,15 +154,14 @@ class ChatGames(commands.Cog):
             description=f"**Quick math!**\n\nAnswer: `{equation} = {answer}`",
             colour=self.bot.main_color
         )
-        return embed, answer.casefold(), answer_embed
+        return embed, answer.casefold(), answer_embed, equation
 
     async def do_event(self, channel_id, cancel_event):
+        self.enabled_channels[channel_id] = (None, cancel_event)
         channel = self.bot.guild.get_channel(channel_id)
         if not channel or not channel.permissions_for(channel.guild.me).read_messages or not channel.permissions_for(
             channel.guild.me).send_messages or not channel.permissions_for(channel.guild.me).embed_links:
-            if self.enabled_channels[channel_id]:
-                self.enabled_channels[channel_id][1].set()
-                self.enabled_channels[channel_id][0].cancel()
+            cancel_event.set()
             del self.enabled_channels[channel_id]
             await self.db.find_one_and_update(
                 {'_id': 'chatgames-config'},
@@ -153,27 +172,27 @@ class ChatGames(commands.Cog):
 
         try:
             await self._do_event(channel)
-        except Exception:
-            pass
-        if not cancel_event.is_set():
-            event = asyncio.Event()
-            self.enabled_channels[channel_id] = (self.bot.loop.call_later(self.next_wait,
-                                                                          lambda c=channel_id,
-                                                                                 e=event: asyncio.create_task(
-                                                                              self.do_event(channel_id, e))), event)
+        finally:
+            if not cancel_event.is_set():
+                event = asyncio.Event()
+                self.enabled_channels[channel_id] = (self.bot.loop.call_later(self.next_wait,
+                                                                              lambda c=channel_id,
+                                                                                     e=event: asyncio.create_task(
+                                                                                  self.do_event(c, e))), event)
 
-    async def _do_event(self, channel):
+    async def _do_event(self, channel, weight=1, event_type='random'):
         last_event_message = self._last_event_message.get(channel.id)
         if last_event_message and channel.last_message_id == last_event_message:
             return
 
         queue = self.current_events_queue[channel.id] = asyncio.Queue()
 
-        event_type = random.choice(['unscrabble', 'quickmath'])
-        if event_type == 'unscrabble':
-            embed, answer, answer_embed = self._do_event_unscrabble(channel)
+        if event_type == 'random':
+            event_type = random.choice(['unscramble', 'quickmath'])
+        if event_type == 'unscramble':
+            embed, answer, answer_embed, question = self._do_event_unscramble(channel)
         elif event_type == 'quickmath':
-            embed, answer, answer_embed = self._do_event_quickmath()
+            embed, answer, answer_embed, question = self._do_event_quickmath()
         else:
             return
 
@@ -181,41 +200,64 @@ class ChatGames(commands.Cog):
         self._last_event_message[channel.id] = m.id
 
         winners = []
+        embed.description += "\n\n"
         answer_embed.description += "\n\n"
         emojis = "🥇🥈🥉"
-        start = now = time.process_time()
-        while now - start <= self.timeout and len(winners) < 3:
+
+        start = now = time.time()
+        remaining = start + self.timeout - now
+        tries = collections.defaultdict(int)
+        while remaining > 0 and len(winners) < 3:
             try:
-                message = await asyncio.wait_for(queue.get(), start + self.timeout - now)
+                message = await asyncio.wait_for(queue.get(), remaining)
             except asyncio.TimeoutError:
                 break
-            now = time.process_time()
+            now = time.time()
+            remaining = min(start + self.timeout - now, remaining)
             if message.author.id in winners:
                 continue
+            tries[message.author.id] += 1
             if message.content.casefold() == answer:
-                winners.append(message.author.id)
-                if len(winners) <= 3:
-                    total_secs = (message.created_at - m.created_at).total_seconds()
-                    answer_embed.description += f"{emojis[len(winners)-1]} {message.author.mention} got the correct answer in `{round(total_secs, 2)}s`!\n"
-                    await m.edit(embed=answer_embed)
+                remaining = min(3, remaining)
+                total_secs = (message.created_at - m.created_at).total_seconds()
+                winners.append((message.author.id, total_secs))
+                embed.description += f"{emojis[len(winners)-1]} {message.author.mention} got the correct answer in `{round(total_secs, 2)}s`!\n"
+                answer_embed.description += f"{emojis[len(winners)-1]} {message.author.mention} got the correct answer in `{round(total_secs, 2)}s`!\n"
+                await m.edit(embed=embed)
 
         if len(winners) == 0:
             answer_embed.description += "No one got it this time :(\n"
             await m.edit(embed=answer_embed)
         else:
+            await m.edit(embed=answer_embed)
             data = {}
             if len(winners) >= 1:
-                data['first_place'] = winners[0]
-            if len(winners) >= 2:
-                data['second_place'] = winners[1]
-            if len(winners) >= 3:
-                data['third_place'] = winners[2]
-            data['participants'] = winners
+                try:
+                    data['first_place'] = {
+                        "user_id": winners[0][0],
+                        "tries": tries[winners[0][0]],
+                        "time": winners[0][1]
+                    }
+                    data['second_place'] = {
+                        "user_id": winners[1][0],
+                        "tries": tries[winners[1][0]],
+                        "time": winners[1][1]
+                    }
+                    data['third_place'] = {
+                        "user_id": winners[2][0],
+                        "tries": tries[winners[2][0]],
+                        "time": winners[2][1]
+                    }
+                except IndexError:
+                    pass
             data.setdefault('first_place', None)
             data.setdefault('second_place', None)
             data.setdefault('third_place', None)
-            data['timestamp'] = datetime.datetime.utcnow()
+            data['timestamp'] = m.created_at
             data['type'] = event_type
+            data['question'] = question
+            data['weight'] = weight
+            data['channel'] = channel.id
             await self.db.find_one_and_update(
                 {'_id': 'chatgames-config'},
                 {'$push': {'events': data}},
@@ -257,8 +299,8 @@ class ChatGames(commands.Cog):
         if config == 'min':
             if not isinstance(value, float):
                 return await ctx.send_help(ctx.command)
-            if self.timeout / 60 + 0.2 > value:
-                return await ctx.send(f"Failed. Min value needs to be at least a minute longer than timeout ({self.timeout}s).")
+            if 0.2 > value:
+                return await ctx.send(f"Failed. Min value needs to be at least 12 seconds.")
             if value > self._max_how_often:
                 return await ctx.send(f"Failed. Min value needs to be at less than the max value ({self._max_how_often}m).")
             self._min_how_often = value
@@ -283,8 +325,6 @@ class ChatGames(commands.Cog):
         elif config == 'timeout':
             if not isinstance(value, float):
                 return await ctx.send_help(ctx.command)
-            if value / 60 + 0.2 > self._min_how_often:
-                return await ctx.send(f"Failed. Timeout can't to be longer than the min value ({self._min_how_often}m).")
             if value < 1:
                 return await ctx.send("Failed. Timeout needs to be longer than 1 second.")
             self.timeout = value
@@ -316,8 +356,9 @@ class ChatGames(commands.Cog):
             if value.id not in self.enabled_channels:
                 return await ctx.send("This channel is not enabled!")
             if self.enabled_channels[value.id]:
+                if self.enabled_channels[value.id][0]:
+                    self.enabled_channels[value.id][0].cancel()
                 self.enabled_channels[value.id][1].set()
-                self.enabled_channels[value.id][0].cancel()
             del self.enabled_channels[value.id]
             await self.db.find_one_and_update(
                 {'_id': 'chatgames-config'},
@@ -329,13 +370,14 @@ class ChatGames(commands.Cog):
 
         for channel_id in self.enabled_channels:
             if self.enabled_channels[channel_id]:
+                if self.enabled_channels[channel_id][0]:
+                    self.enabled_channels[channel_id][0].cancel()
                 self.enabled_channels[channel_id][1].set()
-                self.enabled_channels[channel_id][0].cancel()
             event = asyncio.Event()
             self.enabled_channels[channel_id] = (self.bot.loop.call_later(self.next_wait,
                                                                           lambda c=channel_id,
                                                                                  e=event: asyncio.create_task(
-                                                                              self.do_event(channel_id, e))), event)
+                                                                              self.do_event(c, e))), event)
 
         await ctx.send(f"Success! Your change has been saved!")
 
@@ -343,23 +385,36 @@ class ChatGames(commands.Cog):
         aggr = [
             {
                 '$unwind': {
-                    'path': '$events',
-                    'preserveNullAndEmptyArrays': False
+                    'path': '$events'
                 }
             }, {
-            '$group': {
-                '_id': f'$events.{pos}_place',
-                'count': {
-                    '$sum': 1
+                '$project': {
+                    'name': f'$events.{pos}_place.user_id',
+                    'weight': '$events.weight'
                 }
+            }, {
+                '$match': {
+                    'name': {
+                        '$ne': None
+                    },
+                    'weight': {
+                        '$gte': 1
+                    }
+                }
+            }, {
+                '$group': {
+                    '_id': '$name',
+                    'count': {
+                        '$sum': 1
+                    }
+                }
+            }, {
+                '$sort': {
+                    'count': -1
+                }
+            }, {
+                '$limit': 3
             }
-        }, {
-            '$sort': {
-                'count': -1
-            }
-        }, {
-            '$limit': 3
-        }
         ]
         docs = []
         async for doc in self.db.aggregate(aggr):
@@ -369,31 +424,44 @@ class ChatGames(commands.Cog):
     async def _fetch_all(self):
         aggr = [
             {
-                '$project': {
-                    'participants': '$events.participants'
+                '$unwind': {
+                    'path': '$events'
                 }
             }, {
-            '$unwind': {
-                'path': '$participants'
-            }
-        }, {
-            '$unwind': {
-                'path': '$participants'
-            }
-        }, {
-            '$group': {
-                '_id': '$participants',
-                'count': {
-                    '$sum': 1
+                '$project': {
+                    'names': [
+                        '$events.first_place.user_id', '$events.second_place.user_id', '$events.third_place.user_id'
+                    ],
+                    'weight': '$events.weight'
                 }
+            }, {
+                '$unwind': {
+                    'path': '$names'
+                }
+            }, {
+                '$match': {
+                    'names': {
+                        '$ne': None
+                    },
+                    'weight': {
+                        '$gte': 1
+                    }
+                }
+            },  {
+                '$group': {
+                    '_id': '$names',
+                    'count': {
+                        '$sum': 1
+                    }
+                }
+            }, {
+                '$sort': {
+                    'count': -1
+                }
+            }, {
+                '$limit': 3
             }
-        }, {
-            '$sort': {
-                'count': -1
-            }
-        }, {
-            '$limit': 3
-        }]
+        ]
         docs = []
         async for doc in self.db.aggregate(aggr):
             docs += [(doc['_id'],  doc['count'])]
@@ -433,8 +501,44 @@ class ChatGames(commands.Cog):
         value = self.records_to_value(third_places)
         embed.add_field(name='Top Third PLace Winner', value=value, inline=False)
         value = self.records_to_value(participants)
-        embed.add_field(name='Most Questions Completed', value=value, inline=False)
+        embed.add_field(name='Most Overall Wins', value=value, inline=False)
         return await ctx.send(embed=embed)
+
+    async def _start_game(self, ctx, event_type):
+        if ctx.channel.id in self.enabled_channels and self.enabled_channels[ctx.channel.id]:
+            if self.enabled_channels[ctx.channel.id][0] is None:
+                return await ctx.send("There's an unfinished game still going on in this channel, "
+                                      "please wait until it finishes!")
+            self.enabled_channels[ctx.channel.id][0].cancel()
+            self.enabled_channels[ctx.channel.id][1].set()
+            self.enabled_channels[ctx.channel.id] = (None, asyncio.Event())
+
+        try:
+            await self._do_event(ctx.channel, weight=0, event_type=event_type)
+        finally:
+            if ctx.channel.id in self.enabled_channels:
+                if not self.enabled_channels[ctx.channel.id] or not self.enabled_channels[ctx.channel.id][1].is_set():
+                    event = asyncio.Event()
+                    self.enabled_channels[ctx.channel.id] = (self.bot.loop.call_later(self.next_wait,
+                                                                                  lambda c=ctx.channel.id,
+                                                                                         e=event: asyncio.create_task(
+                                                                                      self.do_event(c, e))), event)
+
+    @commands.cooldown(1, 3)
+    @commands.bot_has_permissions(send_messages=True, embed_links=True)
+    @commands.command()
+    @checks.has_permissions(PermissionLevel.REGULAR)
+    async def unscramble(self, ctx):
+        """Starts a game on unscramble in the channel"""
+        await self._start_game(ctx, 'unscramble')
+
+    @commands.cooldown(1, 3)
+    @commands.bot_has_permissions(send_messages=True, embed_links=True)
+    @commands.command()
+    @checks.has_permissions(PermissionLevel.REGULAR)
+    async def quickmath(self, ctx):
+        """Starts a game on quick math in the channel"""
+        await self._start_game(ctx, 'quickmath')
 
 
 def setup(bot):

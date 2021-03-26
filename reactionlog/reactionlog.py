@@ -2,7 +2,6 @@ import asyncio
 import datetime
 import re
 
-import demoji
 import discord
 from discord import utils
 from discord.ext import commands
@@ -10,8 +9,6 @@ from discord.ext import commands
 RE_ID = re.compile(r"\b(\d{15,21})\b")
 RE_WEBHOOK_NAME = re.compile(r"webhook name:\s*(.+)\n", re.I)
 RE_EMOJI = re.compile(r'<(a?):([a-zA-Z0-9_]+):([0-9]+)>', re.I)
-
-demoji.download_codes()
 
 
 class ReactionLogger(commands.Cog):
@@ -103,7 +100,6 @@ class ReactionLogger(commands.Cog):
                 or user.id in self.ignored_list:
             return
         custom_emojis = set()
-        unicode_emojis = set()
         content = message.content
 
         matches = RE_EMOJI.findall(content)
@@ -113,17 +109,11 @@ class ReactionLogger(commands.Cog):
                 self.bot._connection, animated=emoji_animated, name=emoji_name, id=emoji_id
             ))
 
-        matches = demoji.findall(message.content)
-        for emoji_name in matches.keys():
-            unicode_emojis.add(discord.PartialEmoji.with_state(
-                self.bot._connection, name=emoji_name
-            ))
-
-        if not custom_emojis and not unicode_emojis:
+        if not custom_emojis:
             return
 
         now = datetime.datetime.utcnow()
-        total_emojis = len(custom_emojis) + len(unicode_emojis)
+        total_emojis = len(custom_emojis)
         total_emojis_text = f"{total_emojis} emoji{'s' if total_emojis != 1 else ''}"
 
         if len(custom_emojis) == 1:
@@ -144,11 +134,6 @@ class ReactionLogger(commands.Cog):
                 embed.set_author(name=f"Message with {total_emojis_text} deleted by {user}")
                 embed.description += f"**Emoji name:** {emoji_text} (emoji can't be found)\n"
 
-            if unicode_emojis:
-                shorten_unicode_emojis = list(unicode_emojis)[:75]
-                more_emojis = len(unicode_emojis) - len(shorten_unicode_emojis)
-                more_text = f" [{more_emojis} more]" if more_emojis > 0 else ""
-                embed.description += f"**Deleted unicode emoji{'s' if len(unicode_emojis) != 1 else ''}:** {' '.join(map(str, shorten_unicode_emojis))}{more_text}\n"
             embed.set_footer(text=f"User ID: {user.id}\n"
                                   f"Channel ID: {message.channel.id}\n"
                                   f"Message ID: {message.id}")
@@ -207,18 +192,13 @@ class ReactionLogger(commands.Cog):
             except Exception:
                 embed.description += f"**Emoji name:** {emoji_text} (emoji can't be found)\n"
 
-            if unicode_emojis:
-                shorten_unicode_emojis = list(unicode_emojis)[:75]
-                more_emojis = len(unicode_emojis) - len(shorten_unicode_emojis)
-                more_text = f" [{more_emojis} more]" if more_emojis > 0 else ""
-                embed.description += f"**Deleted unicode emoji{'s' if len(unicode_emojis) != 1 else ''}:** {' '.join(map(str, shorten_unicode_emojis))}{more_text}\n"
             embed.set_footer(text=f"User ID: {user.id}\n"
                                   f"Channel ID: {message.channel.id}\n"
                                   f"Message ID: {message.id}")
             embeds += [embed]
             return await self.webhook.send(embeds=embeds)
 
-        if len(custom_emojis) > 5:
+        if len(custom_emojis) > 8:
             custom_emojis = list(custom_emojis)
             embeds = []
             emoji = custom_emojis[0]
@@ -239,7 +219,7 @@ class ReactionLogger(commands.Cog):
 
             embeds += [embed]
 
-            for emoji in custom_emojis[1:4]:
+            for emoji in custom_emojis[1:7]:
                 emoji_text = f"`:{emoji.name}:`"
 
                 embed = discord.Embed(
@@ -255,7 +235,7 @@ class ReactionLogger(commands.Cog):
 
                 embeds += [embed]
 
-            emoji = custom_emojis[4]
+            emoji = custom_emojis[7]
 
             emoji_text = f"`:{emoji.name}:`"
 
@@ -271,7 +251,7 @@ class ReactionLogger(commands.Cog):
             except Exception:
                 embed.description += f"**Emoji name:** {emoji_text} (emoji can't be found)\n"
 
-            extra_custom_emojis = custom_emojis[5:30]
+            extra_custom_emojis = custom_emojis[8:30]
             more_emojis = max(len(custom_emojis) - 30, 0)
             emoji_texts = []
             for emoji in extra_custom_emojis:
@@ -284,34 +264,11 @@ class ReactionLogger(commands.Cog):
             more_text = f"\n[{more_emojis} more]" if more_emojis > 0 else ""
             embed.description += f"**More emoji{'s' if len(extra_custom_emojis) != 1 else ''}:**\n{emoji_texts}{more_text}\n"
 
-            if unicode_emojis:
-                shorten_unicode_emojis = list(unicode_emojis)[:10]
-                more_emojis = len(unicode_emojis) - len(shorten_unicode_emojis)
-                more_text = f" [{more_emojis} more]" if more_emojis > 0 else ""
-                embed.description += f"**Deleted unicode emoji{'s' if len(shorten_unicode_emojis) != 1 else ''}:** {' '.join(map(str, shorten_unicode_emojis))}{more_text}\n"
             embed.set_footer(text=f"User ID: {user.id}\n"
                                   f"Channel ID: {message.channel.id}\n"
                                   f"Message ID: {message.id}")
             embeds += [embed]
             return await self.webhook.send(embeds=embeds)
-
-        embed = discord.Embed(
-            description=f"**Message from:** {message.channel.mention}\n",
-            colour=0xffd1df,
-        )
-        embed.timestamp = now
-
-        shorten_unicode_emojis = list(unicode_emojis)[:50]
-        more_emojis = len(unicode_emojis) - len(shorten_unicode_emojis)
-        more_text = f" [{more_emojis} more]" if more_emojis > 0 else ""
-
-        embed.set_author(name=f"Message with {total_emojis_text} deleted by {user}")
-        embed.description += f"**Emoji name{'s' if len(shorten_unicode_emojis) != 1 else ''}:** {' '.join(map(str, shorten_unicode_emojis))}{more_text}\n"
-
-        embed.set_footer(text=f"User ID: {user.id}\n"
-                              f"Channel ID: {message.channel.id}\n"
-                              f"Message ID: {message.id}")
-        return await self.webhook.send(embed=embed)
 
     @commands.Cog.listener()
     async def on_guild_channel_update(self, before, after):

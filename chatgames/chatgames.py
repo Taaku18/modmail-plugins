@@ -47,6 +47,18 @@ class ChatGames(commands.Cog):
 
     async def cog_load(self):
         config = await self.db.find_one({'_id': 'chatgames-config'})
+        # await self.db.find_one_and_update(
+        #     {'_id': 'chatgames-config', 'balance.user_id': 1234},
+        #     {'$inc': {'balance.$.flowers': 4444}},
+        #     upsert=True
+        # )
+
+        # await self.db.find_one_and_update(
+        #     {'_id': 'chatgames-config'},
+        #     {'setOnInsert': {'balance': []}},
+        #     upsert=True
+        # )
+
         if config:
             version = config.get('version')
             if version != 2:
@@ -121,15 +133,14 @@ class ChatGames(commands.Cog):
     def _do_event_quickmath(self):
         num_operands = random.choices([2, 3, 4, 5], [60, 25, 13, 2], k=1)[0]
         operations = random.choices(['+', '-', '*'], k=num_operands-1)
-        operands = random.choices(range(0, 25), k=num_operands)
+        operands = random.choices(range(0, 35), k=num_operands)
         equation = list(itertools.chain.from_iterable(itertools.zip_longest(operands, operations)))[:-1]
         for i, node in enumerate(equation):
             if node == '*':
-                if equation[i-1] > 14 and equation[i+1] > 14:
-                    if random.randint(1, 2) == 1:
-                        equation[i-1] -= 10
-                    else:
-                        equation[i+1] -= 10
+                if equation[i-1] > 10:
+                    equation[i-1] %= 10
+                if equation[i+1] > 10:
+                    equation[i+1] %= 10
 
         equation = " ".join(map(str, equation))
 
@@ -219,7 +230,7 @@ class ChatGames(commands.Cog):
             tries[message.author.id] += 1
             if message.content.casefold() == answer:
                 remaining = min(3, remaining)
-                total_secs = (message.created_at - m.created_at).total_seconds()
+                total_secs = now - start
                 winners.append((message.author.id, total_secs))
                 embed.description += f"{emojis[len(winners)-1]} {message.author.mention} got the correct answer in `{round(total_secs, 2)}s`!\n"
                 answer_embed.description += f"{emojis[len(winners)-1]} {message.author.mention} got the correct answer in `{round(total_secs, 2)}s`!\n"
@@ -381,7 +392,7 @@ class ChatGames(commands.Cog):
 
         await ctx.send(f"Success! Your change has been saved!")
 
-    async def _fetch_place(self, pos):
+    async def _fetch_place(self, pos, min_weight=1):
         aggr = [
             {
                 '$unwind': {
@@ -398,7 +409,7 @@ class ChatGames(commands.Cog):
                         '$ne': None
                     },
                     'weight': {
-                        '$gte': 1
+                        '$gte': min_weight
                     }
                 }
             }, {
@@ -421,7 +432,7 @@ class ChatGames(commands.Cog):
             docs += [(doc['_id'], doc['count'])]
         return docs
 
-    async def _fetch_all(self):
+    async def _fetch_all(self, min_weight=1):
         aggr = [
             {
                 '$unwind': {
@@ -444,7 +455,7 @@ class ChatGames(commands.Cog):
                         '$ne': None
                     },
                     'weight': {
-                        '$gte': 1
+                        '$gte': min_weight
                     }
                 }
             },  {
@@ -480,14 +491,18 @@ class ChatGames(commands.Cog):
     @commands.bot_has_permissions(send_messages=True, embed_links=True)
     @commands.command()
     @checks.has_permissions(PermissionLevel.REGULAR)
-    async def cgboard(self, ctx):
+    async def cgboard(self, ctx, all: str.lower = None):
         """
         Check the current chat game leaderboard!
         """
-        first_places = await self._fetch_place('first')
-        second_places = await self._fetch_place('second')
-        third_places = await self._fetch_place('third')
-        participants = await self._fetch_all()
+        if all == 'all':
+            weight = 0
+        else:
+            weight = 1
+        first_places = await self._fetch_place('first', min_weight=weight)
+        second_places = await self._fetch_place('second', min_weight=weight)
+        third_places = await self._fetch_place('third', min_weight=weight)
+        participants = await self._fetch_all(min_weight=weight)
         embed = discord.Embed(
             title="Chat games leaderboard!",
             colour=self.bot.main_color,
@@ -539,6 +554,13 @@ class ChatGames(commands.Cog):
     async def quickmath(self, ctx):
         """Starts a game on quick math in the channel"""
         await self._start_game(ctx, 'quickmath')
+
+    @commands.command()
+    @checks.has_permissions(PermissionLevel.OWNER)
+    async def cgrestart(self, ctx):
+        """Log out bot"""
+        await ctx.send("Restarting the bot...")
+        await self.bot.logout()
 
 
 def setup(bot):

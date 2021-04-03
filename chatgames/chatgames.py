@@ -392,7 +392,16 @@ class ChatGames(commands.Cog):
 
         await ctx.send(f"Success! Your change has been saved!")
 
-    async def _fetch_place(self, pos, min_weight=1):
+    async def _fetch_place(self, pos, user_id=None, min_weight=1):
+        if not user_id:
+            name = {
+                '$ne': None
+            }
+        else:
+            name = {
+                '$eq': user_id
+            }
+
         aggr = [
             {
                 '$unwind': {
@@ -405,9 +414,7 @@ class ChatGames(commands.Cog):
                 }
             }, {
                 '$match': {
-                    'name': {
-                        '$ne': None
-                    },
+                    'name': name,
                     'weight': {
                         '$gte': min_weight
                     }
@@ -432,7 +439,15 @@ class ChatGames(commands.Cog):
             docs += [(doc['_id'], doc['count'])]
         return docs
 
-    async def _fetch_all(self, min_weight=1):
+    async def _fetch_all(self, user_id=None, min_weight=1):
+        if not user_id:
+            names = {
+                '$ne': None
+            }
+        else:
+            names = {
+                '$eq': user_id
+            }
         aggr = [
             {
                 '$unwind': {
@@ -451,9 +466,7 @@ class ChatGames(commands.Cog):
                 }
             }, {
                 '$match': {
-                    'names': {
-                        '$ne': None
-                    },
+                    'names': names,
                     'weight': {
                         '$gte': min_weight
                     }
@@ -487,34 +500,85 @@ class ChatGames(commands.Cog):
         return '\n'.join(f'{chr(emoji + i)}: <@!{r[0]}> ({r[1]} time{"s" if r[1] != 1 else ""})'
                          for i, r in enumerate(records))
 
+    @staticmethod
+    def double_records_to_value(records1, records2, default='No wins!'):
+        if not (records1 or records2):
+            return default
+        if records1:
+            records1 = records1[0]
+        else:
+            records1 = [records2[0][0], 0]
+
+        if records2:
+            records2 = records2[0]
+        else:
+            records2 = [records1[0], 0]
+
+        return f'<@!{records1[0]}> {records1[1]} win{"s" if records1[1] != 1 else ""} ({records2[1]} ranked)'
+
     @commands.cooldown(1, 3)
     @commands.bot_has_permissions(send_messages=True, embed_links=True)
     @commands.command()
     @checks.has_permissions(PermissionLevel.REGULAR)
-    async def cgboard(self, ctx, all: str.lower = None):
+    async def cgboard(self, ctx, param: typing.Union[discord.Member, discord.User, str.lower] = None):
         """
         Check the current chat game leaderboard!
+
+        Use `{prefix}cgboard all` to see the leaderboard for all games (includes command-invoked games)
+        Use `{prefix}cgboard @user/me` to see the stats for a user or yourself
         """
-        if all == 'all':
+        if param == 'me':
+            param = ctx.author
+
+        if isinstance(param, discord.abc.User):
+            user_id = param.id
+            title = f"Chat games stats for {param}"
+            r_first_places = await self._fetch_place('first', user_id=user_id, min_weight=1)
+            r_second_places = await self._fetch_place('second', user_id=user_id, min_weight=1)
+            r_third_places = await self._fetch_place('third', user_id=user_id, min_weight=1)
+            r_participants = await self._fetch_all(user_id=user_id, min_weight=1)
+            first_places = await self._fetch_place('first', user_id=user_id, min_weight=0)
+            second_places = await self._fetch_place('second', user_id=user_id, min_weight=0)
+            third_places = await self._fetch_place('third', user_id=user_id, min_weight=0)
+            participants = await self._fetch_all(user_id=user_id, min_weight=0)
+            embed = discord.Embed(
+                title=title,
+                colour=self.bot.main_color,
+                timestamp=ctx.message.created_at
+            )
+            embed.set_footer(text=f'Requested by {ctx.author}')
+            value = self.double_records_to_value(first_places, r_first_places)
+            embed.add_field(name='First Places', value=value, inline=False)
+            value = self.double_records_to_value(second_places, r_second_places)
+            embed.add_field(name='Second Places', value=value, inline=False)
+            value = self.double_records_to_value(third_places, r_third_places)
+            embed.add_field(name='Third Places', value=value, inline=False)
+            value = self.double_records_to_value(participants, r_participants)
+            embed.add_field(name='Overall Wins', value=value, inline=False)
+            return await ctx.send(embed=embed)
+
+        if param == 'all':
             weight = 0
+            title = "Chat games leaderboard!"
         else:
             weight = 1
+            title = "Chat games leaderboard (ranked)!"
         first_places = await self._fetch_place('first', min_weight=weight)
         second_places = await self._fetch_place('second', min_weight=weight)
         third_places = await self._fetch_place('third', min_weight=weight)
         participants = await self._fetch_all(min_weight=weight)
         embed = discord.Embed(
-            title="Chat games leaderboard!",
+            title=title,
             colour=self.bot.main_color,
             timestamp=ctx.message.created_at
         )
         embed.set_footer(text=f'Requested by {ctx.author}')
         value = self.records_to_value(first_places)
-        embed.add_field(name='Top First PLace Winner', value=value, inline=False)
+        embed.add_field(name='Top First Place Winner', value=value, inline=False)
         value = self.records_to_value(second_places)
-        embed.add_field(name='Top Second PLace Winner', value=value, inline=False)
+        embed.add_field(name='Top Second Place Winner', value=value, inline=False)
         value = self.records_to_value(third_places)
-        embed.add_field(name='Top Third PLace Winner', value=value, inline=False)
+        embed.add_field(name='Top Third Place Winner', value=value, inline=False)
         value = self.records_to_value(participants)
         embed.add_field(name='Most Overall Wins', value=value, inline=False)
         return await ctx.send(embed=embed)

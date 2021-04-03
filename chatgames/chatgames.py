@@ -555,7 +555,7 @@ class ChatGames(commands.Cog):
         """Starts a game on quick math in the channel"""
         await self._start_game(ctx, 'quickmath')
 
-    @commands.command()
+    @commands.command(hidden=True)
     @checks.has_permissions(PermissionLevel.OWNER)
     async def cgrestart(self, ctx):
         """Log out bot"""

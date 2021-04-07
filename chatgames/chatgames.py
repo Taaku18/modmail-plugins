@@ -225,7 +225,7 @@ class ChatGames(commands.Cog):
                 break
             now = time.time()
             remaining = min(start + self.timeout - now, remaining)
-            if message.author.id in winners:
+            if any(1 for w in winners if w[0] == message.author.id):
                 continue
             tries[message.author.id] += 1
             if message.content.casefold() == answer:

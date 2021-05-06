@@ -70,9 +70,9 @@ class Parkour(commands.Cog):
             if not 1 <= level <= 176:
                 return await ctx.send("There's only 1-176 levels!")
         if level == -1:
-            return await ctx.send("The start coords is `41 97 -35`!\n```\n\\tp 41 97 -35```")
+            return await ctx.send("The start coords is:\n```\n/tp 41 97 -35```")
         elif level == -2:
-            return await ctx.send("The end coords is `-43 125 -26`!\n```\n\\tp -43 125 -26```")
+            return await ctx.send("The end coords is:\n```\n/tp -43 125 -26```")
         if 1 <= level < 64:
             y = 97
         elif 64 <= level < 119:
@@ -109,7 +109,7 @@ class Parkour(commands.Cog):
         if level in {64, 119}:
             z += 1
 
-        return await ctx.send(f"The coords for level **{level}** is `{x} {y} {z}`!\n```\n\\tp {x} {y} {z}```")
+        return await ctx.send(f"The coords for level **{level}** is:\n```\n/tp {x} {y} {z}```")
 
     @checks.has_permissions(PermissionLevel.REGULAR)
     @commands.command(name="reqskip", aliases=['requestskip', 'skiprequest', 'skipreq'])

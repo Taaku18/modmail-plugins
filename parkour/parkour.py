@@ -52,11 +52,71 @@ class Parkour(commands.Cog):
         await ctx.send(f"Skip request channel set to {channel.mention}.")
 
     @checks.has_permissions(PermissionLevel.REGULAR)
+    @commands.command(aliases=['parkourcoords'])
+    async def pcoords(self, ctx, *, level: str.lower):
+        """Get the cords of a parkour level
+
+        Level 1-176, start, end
+        Floor 1: 1-63
+        Floor 2: 64-118
+        Floor 3: 119-176
+        """
+        if not level.isdigit():
+            if level not in {'start', 'end'}:
+                return await ctx.send("Not a valid level!")
+            level = -1 if level == 'start' else -2
+        else:
+            level = int(level)
+            if not 1 <= level <= 176:
+                return await ctx.send("There's only 1-176 levels!")
+        if level == -1:
+            return await ctx.send("The start coords is `41 97 -35`!\n```\n\\tp 41 97 -35```")
+        elif level == -2:
+            return await ctx.send("The end coords is `-43 125 -26`!\n```\n\\tp -43 125 -26```")
+        if 1 <= level < 64:
+            y = 97
+        elif 64 <= level < 119:
+            y = 109
+        else:
+            y = 127
+
+        level_offset = 0
+        if level >= 99:
+            level_offset += 1
+        if level >= 158:
+            level_offset += 1
+        if level >= 171:
+            level_offset += 3
+
+        if 1 <= level < 64:
+            x = 41 - 12 * ((level + level_offset) // 8)
+        elif 64 <= level < 119:
+            x = 40 - 14 * ((level + level_offset - 64) // 8)
+        else:
+            x = 41 - 12 * ((level + level_offset - 119) // 8)
+
+        if level < 119:
+            if ((level + level_offset) // 8) % 2 == 0:
+                z = -36 + 12 * ((level + level_offset) % 8)
+            else:
+                z = 60 - 12 * ((level + level_offset) % 8)
+        else:
+            if ((level + level_offset) // 8) % 2 != 0:
+                z = -36 + 12 * ((level + level_offset) % 8)
+            else:
+                z = 60 - 12 * ((level + level_offset) % 8)
+
+        if level in {64, 119}:
+            z += 1
+
+        return await ctx.send(f"The coords for level **{level}** is `{x} {y} {z}`!\n```\n\\tp {x} {y} {z}```")
+
+    @checks.has_permissions(PermissionLevel.REGULAR)
     @commands.command(name="reqskip", aliases=['requestskip', 'skiprequest', 'skipreq'])
     @commands.cooldown(1, 15)
     async def request_skip(self, ctx, ign: str = None, level: typing.Union[int, str] = None):
         """Request a weewoo parkour skip if you're stuck on a level
-        
+
         Abusing this command will result in a mute.
         """
         if not self._req_channel_id:
@@ -140,7 +200,8 @@ class Parkour(commands.Cog):
             upsert=True
         )
 
-        await ctx.send(f"{ctx.author.mention} Your skip request was submitted successfully. Staff will process your request shortly!\n\nIGN: `{ign}`\nCurrent level: `{level}`")
+        await ctx.send(
+            f"{ctx.author.mention} Your skip request was submitted successfully. Staff will process your request shortly!\n\nIGN: `{ign}`\nCurrent level: `{level}`")
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
@@ -230,7 +291,8 @@ class Parkour(commands.Cog):
                     return
                 await channel.create_dm()
 
-        await channel.send(f"<@!{req['user_id']}> Your parkour skip request for `{req['ign']}` from level **{req['level']}** to **{req['level'] + 1}** has been {text}!")
+        await channel.send(
+            f"<@!{req['user_id']}> Your parkour skip request for `{req['ign']}` from level **{req['level']}** to **{req['level'] + 1}** has been {text}!")
 
 
 def setup(bot):

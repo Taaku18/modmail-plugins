@@ -140,7 +140,7 @@ class Parkour(commands.Cog):
             upsert=True
         )
 
-        await ctx.send(f"{ctx.author.mention} Your skip request was submitted successfully! Staff will process your request shortly.\n\nIGN: `{ign}`\nCurrent level: `{level}`")
+        await ctx.send(f"{ctx.author.mention} Your skip request was submitted successfully! Staff will process your request shortly.\nIGN: `{ign}`\nCurrent level: `{level}`")
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):

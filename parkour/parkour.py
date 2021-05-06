@@ -119,7 +119,7 @@ class Parkour(commands.Cog):
                 return
 
         embed = discord.Embed(colour=discord.Colour.gold(),
-                              description=f"IGN: **{ign}**\nStuck Level: **{level}**",
+                              description=f"IGN: **{ign}**\nCurrent level: **{level}**",
                               timestamp=ctx.message.created_at)
         embed.set_author(name=f"{ctx.author}'s parkour skip request")
         embed.set_footer(text="Status: pending")
@@ -140,7 +140,7 @@ class Parkour(commands.Cog):
             upsert=True
         )
 
-        await ctx.send(f"{ctx.author.mention} Your skip request was submitted successfully! IGN: `{ign}` Current level: `{level}`")
+        await ctx.send(f"{ctx.author.mention} Your skip request was submitted successfully! Staff will process your request shortly. IGN: `{ign}` Current level: `{level}`")
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):

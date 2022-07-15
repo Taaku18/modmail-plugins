@@ -420,7 +420,7 @@ class Music(commands.Cog, name="music"):
             messages[i] = prefix + messages[i].replace('```', '``\u200b`').replace('@', '@\u200b') + suffix
         return messages
 
-    @commands.cooldown(1, 10)
+''' @commands.cooldown(1, 10)
     @commands.bot_has_permissions(send_messages=True, embed_links=True)
     @commands.command()
     @checks.has_permissions(PermissionLevel.OWNER)
@@ -450,7 +450,7 @@ class Music(commands.Cog, name="music"):
                                   f"Key:\n`#{data}#`\n```\n\nWe'll give you a free music API URI with courtesy of ¥¥lorenzo¥¥#0001!")
             await ctx.send(f"{ctx.author.mention} Please check your DM!")
         except discord.HTTPException:
-            raise Failure(ctx, "I'll need to be able to DM you, please enable DM from this server.")
+            raise Failure(ctx, "I'll need to be able to DM you, please enable DM from this server.")'''
 
     @commands.cooldown(1, 10)
     @commands.bot_has_permissions(send_messages=True, embed_links=True)
@@ -460,7 +460,7 @@ class Music(commands.Cog, name="music"):
         """
         There are three valid config types: `api`, `spotify` and `genius`.
 
-        Courtesy of ¥¥lorenzo¥¥#0001, you can request a **free** API URI from us. Run the `{prefix}requestapi` command to get your very own api URI.
+        To obtain a an API key, you will need to [host your own Lavalink instance](https://lavalink.readthedocs.io/en/master/quickstart.html), or find a public one. Please note that Modmail holds no responsibility for the data collected or the reliability of any public lavalink instance.
 
         Spotify is for spotify support and genius is for lyrics search.
 
@@ -1362,7 +1362,7 @@ class Music(commands.Cog, name="music"):
                         "Originally made for [uwubot](https://top.gg/bot/720334365661462710).",
             colour=0x8cffdb,
         )
-        embed.add_field(name="Usage", value=f"To get started, request a free API URI with `{self.bot.prefix}requestapi` and once you have receive your API URI run `{self.bot.prefix}musicconfig api <APIURI>`.")
+        embed.add_field(name="Usage", value=f"To get started, run `{self.bot.prefix}musicconfig` to see what to do to get started.")
         embed.add_field(name="Donate ❤️", value="If you're feeling generous, you can donate to my Patreon at https://www.patreon.com/takubot to support this free Groovy-alternative music bot!")
         await ctx.send(embed=embed)
 
